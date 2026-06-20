@@ -1,0 +1,91 @@
+{% extends "base.html" %} {% block title %}生词本 - Xictation{% endblock %} {%
+block content %}
+<div class="list-container">
+  <div class="list-header">
+    <h2>生词本</h2>
+    <button class="btn-primary btn-new-vocab" onclick="addNewVocab()">
+      + 新建生词
+    </button>
+  </div>
+  <div class="search-bar">
+    <input
+      type="text"
+      id="vocab-search"
+      placeholder="搜索单词、音标或翻译..."
+      value="{{ q }}"
+      onkeydown="
+        if (event.key === 'Enter') {
+          window.location.href =
+            '/vocabulary?q=' + encodeURIComponent(this.value) + '&sort={{ sort }}';
+        }
+      "
+    />
+    <div class="sort-toggle">
+      <a href="/vocabulary?q={{ q }}&sort=time" class="sort-btn {% if sort == 'time' %}active{% endif %}">按时间</a>
+      <a href="/vocabulary?q={{ q }}&sort=alpha" class="sort-btn {% if sort == 'alpha' %}active{% endif %}">A-Z</a>
+    </div>
+    {% if q %}<a href="/vocabulary?sort={{ sort }}" class="btn-text">清除</a>{% endif %}
+  </div>
+  <div class="vocab-grid">
+    {% if words %} {% for w in words %}
+    <div class="vocab-card" data-id="{{ w.id }}">
+      <div class="vocab-card-header">
+        <h3 class="vocab-word">{{ w.word }}</h3>
+        <div class="vocab-card-actions">
+          <button
+            class="btn-text btn-small"
+            onclick="editVocabFromList({{ w.id }})"
+            title="编辑"
+          >
+            编辑
+          </button>
+          <button
+            class="btn-icon btn-delete"
+            onclick="deleteVocab({{ w.id }})"
+            title="删除"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      {% if w.phonetic %}
+      <p class="vocab-phonetic">/{{ w.phonetic }}/</p>
+      {% endif %} {% if w.translation %}
+      <p class="vocab-translation">{{ w.translation }}</p>
+      {% endif %} {% if w.notes %}
+      <p class="vocab-notes">{{ w.notes }}</p>
+      {% endif %}
+      <div class="vocab-meta">
+        {% set read_sources = (w.sources or {}).get('cannot_read', []) if w.sources and w.sources is mapping else [] %}
+        {% set understand_sources = (w.sources or {}).get('cannot_understand', []) if w.sources and w.sources is mapping else [] %}
+        {% if read_sources %}
+        <div class="vocab-sources">
+          <span class="vocab-source-label source-label-read">读不懂</span>
+          <div class="vocab-source-list">
+            {% for s in read_sources %}
+            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag">{{ s.dictation_title }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% if understand_sources %}
+        <div class="vocab-sources">
+          <span class="vocab-source-label source-label-understand">听不懂</span>
+          <div class="vocab-source-list">
+            {% for s in understand_sources %}
+            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag">{{ s.dictation_title }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %} {% else %}
+    <div class="empty-state">
+      <p>暂无生词</p>
+      <p class="muted">在听写详情页通过"分析错误"功能添加生词</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

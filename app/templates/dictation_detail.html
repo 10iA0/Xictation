@@ -1,0 +1,396 @@
+{% extends "base.html" %} {% block title %}{% if dictation %}{{ dictation.title
+}}{% else %}新建听写{% endif %} - Xictation{% endblock %} {% block content %}
+<div
+  class="detail-container"
+  data-dictation-id="{{ dictation.id if dictation else '' }}"
+>
+  <!-- 顶部信息区 -->
+  <div class="detail-header">
+    <div class="detail-header-top">
+      <a href="/dictations" class="btn-text" onclick="return handleBack()">← 返回</a>
+      {% if not dictation %}
+      <button class="btn-primary" onclick="saveDictation()">创建</button>
+      {% endif %}
+    </div>
+    <div class="detail-header-fields">
+      <div class="field-group">
+        <label class="field-label" for="dictation-title">名称</label>
+        <input
+          type="text"
+          id="dictation-title"
+          placeholder="听写页名称"
+          value="{{ dictation.title if dictation else '' }}"
+        />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="dictation-audio">来源</label>
+        <input
+          type="text"
+          id="dictation-audio"
+          placeholder="音频来源 URL 或文字描述"
+          value="{{ dictation.audio_source if dictation else '' }}"
+        />
+      </div>
+      <div class="field-group">
+        <label class="field-label">标签</label>
+        <div class="tags-input-wrapper">
+          <div class="tags-chips" id="tags-chips">
+            {% if dictation %} {% for dt in dictation.tags %}
+            <span class="tag-chip" data-tag="{{ dt.tag.name }}"
+              >{{ dt.tag.name
+              }}<button class="tag-remove" onclick="removeTag(this)">×</button></span
+            >
+            {% endfor %} {% endif %}
+          </div>
+          <input
+            type="text"
+            id="dictation-tag-input"
+            placeholder="输入标签后回车添加"
+            onkeydown="handleTagKeydown(event)"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片列表（每行：听写卡片 + 分析卡片并排） -->
+  <div class="cards-list">
+    <div id="cards-container">
+      {% if dictation %} {% for card in dictation.cards %}
+      <div
+        class="card-row"
+        id="card-row-{{ card.id }}"
+        data-card-id="{{ card.id }}"
+        draggable="true"
+      >
+        <!-- 左：听写卡片 -->
+        <div class="dict-card">
+          <div class="dict-card-toolbar">
+            <div class="card-drag-handle" title="拖拽排序">⋮⋮</div>
+            <button
+              class="btn-text btn-analysis {% if card.analysis_card %}btn-disabled{% endif %}"
+              onclick="toggleAnalysis({{ card.id }}, this)"
+              {%
+              if
+              card.analysis_card
+              %}disabled{%
+              endif
+              %}"
+            >
+              分析错误
+            </button>
+            <button
+              class="btn-text btn-toggle-extra"
+              onclick="toggleExtra(this)"
+              type="button"
+            >
+              结构分析
+            </button>
+            <button
+              class="btn-icon btn-delete"
+              onclick="deleteCard({{ card.id }})"
+              title="删除卡片"
+            >
+              ×
+            </button>
+          </div>
+
+          <!-- 听写内容 -->
+          <div class="content-block" data-card-id="{{ card.id }}">
+            <div class="content-label">听写内容</div>
+            <textarea
+              class="card-content-input"
+              data-card-id="{{ card.id }}"
+              placeholder="写下你听到的内容..."
+            >
+{{ card.content }}</textarea
+            >
+            <div
+              class="card-content-display"
+              data-card-id="{{ card.id }}"
+              style="display: none"
+            ></div>
+          </div>
+
+          <!-- 正确内容 -->
+          <div class="content-block" data-card-id="{{ card.id }}">
+            <div class="content-label">正确内容</div>
+            <textarea
+              class="correct-content-input"
+              data-card-id="{{ card.id }}"
+              placeholder="写下正确的内容..."
+            >
+{{ card.correct_content if card.correct_content is not none else '' }}</textarea
+            >
+            <div
+              class="correct-content-display"
+              data-card-id="{{ card.id }}"
+              style="display: none"
+            ></div>
+            <div class="correct-toolbar">
+              <button
+                class="btn-annotation"
+                data-type="color"
+                onclick="applyAnnotation(this, 'color')"
+              >
+                颜色
+              </button>
+              <button
+                class="btn-annotation"
+                data-type="liaison"
+                onclick="applyAnnotation(this, 'liaison')"
+              >
+                连读
+              </button>
+              <button
+                class="btn-annotation"
+                data-type="weak"
+                onclick="applyAnnotation(this, 'weak')"
+              >
+                弱读
+              </button>
+              <button
+                class="btn-annotation"
+                data-type="burst"
+                onclick="applyAnnotation(this, 'burst')"
+              >
+                爆破
+              </button>
+            </div>
+          </div>
+
+          <!-- 卡片右下角统一保存按钮 -->
+          <div class="card-footer">
+            <button
+              class="btn-primary btn-save-card"
+              onclick="saveCard({{ card.id }})"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+
+        <!-- 右：分析卡片 + 结构卡片 -->
+        <div class="right-cards">
+          {% if card.analysis_card %}
+          <div
+            class="analysis-card"
+            data-card-id="{{ card.id }}"
+            data-analysis-card-id="{{ card.analysis_card.id }}"
+          >
+            <div class="analysis-card-header">
+              <a
+                href="#card-row-{{ card.id }}"
+                class="analysis-source-link"
+                onclick="highlightCard({{ card.id }})"
+              >
+                ← 来自听写卡片 #{{ loop.index }}
+              </a>
+              <button
+                class="btn-icon btn-delete"
+                onclick="deleteAnalysisCard({{ card.id }})"
+                title="删除分析卡片"
+              >
+                ×
+              </button>
+            </div>
+            <div class="analysis-sections">
+              <div class="analysis-section">
+                <h5>读不懂（生词）</h5>
+                <div class="vocab-list" data-card-id="{{ card.id }}">
+                  {% for v in card.vocab_read %}
+                  <div class="vocab-item vocab-card" data-id="{{ v.id }}">
+                    <div class="vocab-card-header">
+                      <h3 class="vocab-word">{{ v.word }}</h3>
+                      <div class="vocab-card-actions">
+                        <button
+                          class="btn-text btn-small"
+                          onclick="editVocab({{ v.id }}, {{ card.id }})"
+                          title="编辑"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          class="btn-icon btn-delete"
+                          onclick="deleteVocabFromCard({{ v.id }}, {{ card.id }}, 'cannot_read')"
+                          title="删除"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                    {% if v.phonetic %}
+                    <p class="vocab-phonetic">/{{ v.phonetic }}/</p>
+                    {% endif %} {% if v.translation %}
+                    <p class="vocab-translation">{{ v.translation }}</p>
+                    {% endif %} {% if v.notes %}
+                    <p class="vocab-notes">{{ v.notes }}</p>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                <button
+                  class="btn-secondary btn-small"
+                  onclick="addVocabFromAnalysis({{ card.id }}, {{ dictation.id }}, 'cannot_read')"
+                >
+                  + 添加
+                </button>
+              </div>
+              <div class="analysis-section">
+                <h5>听不懂（音标/重音）</h5>
+                <div class="vocab-list" data-card-id="{{ card.id }}">
+                  {% for v in card.vocab_understand %}
+                  <div class="vocab-item vocab-card" data-id="{{ v.id }}">
+                    <div class="vocab-card-header">
+                      <h3 class="vocab-word">{{ v.word }}</h3>
+                      <div class="vocab-card-actions">
+                        <button
+                          class="btn-text btn-small"
+                          onclick="editVocab({{ v.id }}, {{ card.id }})"
+                          title="编辑"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          class="btn-icon btn-delete"
+                          onclick="deleteVocabFromCard({{ v.id }}, {{ card.id }}, 'cannot_understand')"
+                          title="删除"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                    {% if v.phonetic %}
+                    <p class="vocab-phonetic">/{{ v.phonetic }}/</p>
+                    {% endif %} {% if v.translation %}
+                    <p class="vocab-translation">{{ v.translation }}</p>
+                    {% endif %} {% if v.notes %}
+                    <p class="vocab-notes">{{ v.notes }}</p>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                <button
+                  class="btn-secondary btn-small"
+                  onclick="addVocabFromAnalysis({{ card.id }}, {{ dictation.id }}, 'cannot_understand')"
+                >
+                  + 添加
+                </button>
+              </div>
+              <div class="analysis-section">
+                <h5>听不到（连读/弱读/爆破）</h5>
+                <div
+                  class="analysis-records"
+                  data-category="cannot_hear"
+                  data-card-id="{{ card.id }}"
+                >
+                  {% for r in card.analysis_card.records if r.category ==
+                  'cannot_hear' %}
+                  <div class="analysis-record" data-id="{{ r.id }}">
+                    <span
+                      class="record-content"
+                      onclick="editAnalysisRecord({{ r.id }}, this)"
+                      >{{ r.content }}</span
+                    >
+                    <button
+                      class="btn-icon"
+                      onclick="deleteAnalysisRecord({{ r.id }})"
+                      title="删除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <button
+                  class="btn-secondary btn-small"
+                  onclick="addAnalysisRecord({{ card.id }}, 'cannot_hear')"
+                >
+                  + 添加
+                </button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- 结构卡片（默认隐藏，点击"结构分析"按钮展开） -->
+          <div class="structure-card" style="display: none;">
+            <div class="structure-card-header">
+              <a
+                href="#card-row-{{ card.id }}"
+                class="analysis-source-link"
+                onclick="highlightCard({{ card.id }})"
+              >
+                ← 来自听写卡片 #{{ loop.index }}
+              </a>
+              <button
+                class="btn-icon btn-delete"
+                onclick="closeStructure({{ card.id }})"
+                title="关闭结构卡片"
+              >
+                ×
+              </button>
+            </div>
+            <!-- 翻译内容 -->
+            <div class="content-block" data-card-id="{{ card.id }}">
+              <div class="content-label">
+                翻译内容
+                <button
+                  class="btn-secondary btn-small btn-translate"
+                  type="button"
+                  onclick="translateCard({{ card.id }})"
+                >
+                  翻译
+                </button>
+              </div>
+              <textarea
+                class="card-translation-input"
+                data-card-id="{{ card.id }}"
+                placeholder="点击翻译按钮自动填充，或手动输入..."
+              >{{ card.translation if card.translation else '' }}</textarea>
+              <div
+                class="card-translation-display"
+                data-card-id="{{ card.id }}"
+                style="display: none"
+              ></div>
+            </div>
+            <!-- 分析内容 -->
+            <div class="content-block" data-card-id="{{ card.id }}">
+              <div class="content-label">分析内容</div>
+              <textarea
+                class="card-analysis-input"
+                data-card-id="{{ card.id }}"
+                placeholder="写下你的分析..."
+              >{{ card.analysis if card.analysis else '' }}</textarea>
+              <div
+                class="card-analysis-display"
+                data-card-id="{{ card.id }}"
+                style="display: none"
+              ></div>
+            </div>
+            <!-- 结构卡片保存/编辑按钮 -->
+            <div class="card-footer">
+              <button
+                class="btn-primary btn-save-structure"
+                onclick="saveStructure({{ card.id }})"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %} {% else %}
+      <div class="empty-state">
+        <p>点击"新建卡片"开始听写</p>
+      </div>
+      {% endif %}
+    </div>
+    <div class="cards-list-footer">
+      <button class="btn-secondary" onclick="addCard()">+ 新建卡片</button>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_script %}
+<script src="/static/js/detail.js?v=40"></script>
+{% endblock %}

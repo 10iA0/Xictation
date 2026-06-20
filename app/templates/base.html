@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>{% block title %}Xictation 精听工具{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=45" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <div class="app-container" id="app-container">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <h1 class="logo">Xictation</h1>
+          <button
+            class="sidebar-toggle"
+            id="sidebar-toggle"
+            onclick="toggleSidebar()"
+            title="收起侧边栏"
+          >
+            ‹
+          </button>
+        </div>
+        <nav class="sidebar-nav">
+          <a
+            href="/dictations"
+            class="nav-item {% if active_tab == 'dictations' %}active{% endif %}"
+          >
+            <span class="nav-icon">≡</span>
+            <span>听写本</span>
+          </a>
+          <a
+            href="/vocabulary"
+            class="nav-item {% if active_tab == 'vocabulary' %}active{% endif %}"
+          >
+            <span class="nav-icon">★</span>
+            <span>生词本</span>
+          </a>
+        </nav>
+      </aside>
+      <button
+        class="sidebar-expand"
+        id="sidebar-expand"
+        onclick="toggleSidebar()"
+        title="展开侧边栏"
+      >
+        ›
+      </button>
+      <main class="main-content">{% block content %}{% endblock %}</main>
+    </div>
+    <script src="/static/js/main.js?v=16"></script>
+    {% block extra_script %}{% endblock %}
+  </body>
+</html>

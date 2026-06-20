@@ -1,0 +1,55 @@
+{% extends "base.html" %} {% block title %}听写本 - Xictation{% endblock %} {%
+block content %}
+<div class="list-container">
+  <div class="list-header">
+    <h2>听写本</h2>
+    <a href="/dictations/new" class="btn-primary">+ 新建听写</a>
+  </div>
+  <div class="search-bar">
+    <input
+      type="text"
+      id="search-input"
+      placeholder="搜索标题、内容或标签..."
+      value="{{ q }}"
+      onkeydown="
+        if (event.key === 'Enter') {
+          window.location.href =
+            '/dictations?q=' + encodeURIComponent(this.value);
+        }
+      "
+    />
+    {% if q %}<a href="/dictations" class="btn-text">清除</a>{% endif %}
+  </div>
+  <div class="list-items" id="dictations-container">
+    {% if dictations %} {% for d in dictations %}
+    <a
+      href="/dictations/{{ d.id }}"
+      class="list-item"
+      draggable="true"
+      data-dictation-id="{{ d.id }}"
+    >
+      <div class="list-item-drag-handle" title="拖拽排序">⋮⋮</div>
+      <div class="list-item-main">
+        <h3>{{ d.title }}</h3>
+      </div>
+      <div class="list-item-meta">
+        <span class="time">{{ d.created_at.strftime('%Y-%m-%d') }}</span>
+        <span class="card-count">{{ d.cards|length }} 张卡片</span>
+        <button
+          class="btn-icon btn-delete"
+          onclick="event.preventDefault(); event.stopPropagation(); deleteDictation({{ d.id }})"
+          title="删除"
+        >
+          ×
+        </button>
+      </div>
+    </a>
+    {% endfor %} {% else %}
+    <div class="empty-state">
+      <p>暂无听写记录</p>
+      <a href="/dictations/new" class="btn-primary">创建第一个听写</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
