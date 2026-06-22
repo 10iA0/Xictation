@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 - Xictation 精听工具</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=51" />
+    <style>
+      .login-page {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background-color: var(--color-bg);
+        padding: 20px;
+      }
+      .login-card {
+        width: 100%;
+        max-width: 360px;
+        background-color: var(--color-surface);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        padding: 32px 28px;
+      }
+      .login-title {
+        font-size: 24px;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 4px;
+      }
+      .login-subtitle {
+        font-size: 14px;
+        color: var(--color-text-secondary);
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .login-form .form-group {
+        margin-bottom: 16px;
+      }
+      .login-form label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      .login-form input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      .login-form input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+      }
+      .login-form .btn-login {
+        width: 100%;
+        padding: 10px;
+        background-color: var(--color-primary);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+      .login-form .btn-login:hover {
+        opacity: 0.9;
+      }
+      .login-error {
+        color: #e53e3e;
+        font-size: 13px;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-page">
+      <div class="login-card">
+        <h1 class="login-title">Xictation</h1>
+        <p class="login-subtitle">精听工具</p>
+        {% if error %}
+        <div class="login-error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="/login" class="login-form">
+          <div class="form-group">
+            <label for="username">账号</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              required
+              autofocus
+              value="{{ username or '' }}"
+              placeholder="请输入账号"
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">密码</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              placeholder="请输入密码"
+            />
+          </div>
+          <button type="submit" class="btn-login">登录</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,25 +1,84 @@
 // 主脚本：通用功能
 
 // ========== 侧边栏折叠（全局状态持久化） ==========
+function isMobileView() {
+  return window.innerWidth <= 768;
+}
+
 function toggleSidebar() {
   const sidebar = document.getElementById("sidebar");
   const expandBtn = document.getElementById("sidebar-expand");
-  if (sidebar.classList.contains("collapsed")) {
-    sidebar.classList.remove("collapsed");
-    expandBtn.classList.remove("show");
-    localStorage.setItem("sidebarCollapsed", "false");
+  const overlay = document.getElementById("sidebar-overlay");
+
+  if (isMobileView()) {
+    // 移动端：使用 mobile-open 类 + 遮罩
+    const isOpen = sidebar.classList.contains("mobile-open");
+    if (isOpen) {
+      sidebar.classList.remove("mobile-open");
+      expandBtn.classList.add("show");
+      expandBtn.classList.remove("activated");
+      if (overlay) overlay.classList.remove("show");
+    } else {
+      sidebar.classList.add("mobile-open");
+      expandBtn.classList.remove("show");
+      expandBtn.classList.remove("activated");
+      if (overlay) overlay.classList.add("show");
+    }
   } else {
-    sidebar.classList.add("collapsed");
-    expandBtn.classList.add("show");
-    localStorage.setItem("sidebarCollapsed", "true");
+    // 桌面端：原有折叠逻辑
+    if (sidebar.classList.contains("collapsed")) {
+      sidebar.classList.remove("collapsed");
+      expandBtn.classList.remove("show");
+      localStorage.setItem("sidebarCollapsed", "false");
+    } else {
+      sidebar.classList.add("collapsed");
+      expandBtn.classList.add("show");
+      localStorage.setItem("sidebarCollapsed", "true");
+    }
   }
 }
 
+// 移动端侧边栏展开按钮：两步点击（防误触）
+// 桌面端：直接打开侧边栏
+(function initExpandBtn() {
+  const expandBtn = document.getElementById("sidebar-expand");
+  if (!expandBtn) return;
+
+  expandBtn.addEventListener("click", function (e) {
+    if (isMobileView()) {
+      // 移动端：两步点击
+      if (!this.classList.contains("activated")) {
+        // 第一次点击：激活按钮
+        e.preventDefault();
+        e.stopPropagation();
+        this.classList.add("activated");
+        // 3秒后自动回到静默状态
+        this._deactivateTimer = setTimeout(() => {
+          this.classList.remove("activated");
+        }, 3000);
+      } else {
+        // 第二次点击：打开侧边栏
+        clearTimeout(this._deactivateTimer);
+        this.classList.remove("activated");
+        toggleSidebar();
+      }
+    } else {
+      // 桌面端：直接打开
+      toggleSidebar();
+    }
+  });
+})();
+
 // 页面加载时恢复侧边栏状态
 (function restoreSidebar() {
-  if (localStorage.getItem("sidebarCollapsed") === "true") {
-    document.getElementById("sidebar")?.classList.add("collapsed");
+  if (isMobileView()) {
+    // 移动端默认收起，显示展开按钮
     document.getElementById("sidebar-expand")?.classList.add("show");
+  } else {
+    if (localStorage.getItem("sidebarCollapsed") === "true") {
+      document.getElementById("sidebar")?.classList.add("collapsed");
+      document.getElementById("sidebar-expand")?.classList.add("show");
+    }
   }
 })();
 
@@ -33,6 +92,9 @@ async function addNewVocab() {
     body: JSON.stringify({
       word: result.word,
       phonetic: result.phonetic,
+      pos: result.pos,
+      past_tense: result.past_tense,
+      past_participle: result.past_participle,
       translation: result.translation,
       notes: result.notes,
       labels: result.labels,
@@ -58,7 +120,19 @@ async function editVocabFromList(vocabId) {
   if (!card) return;
   const word = card.querySelector(".vocab-word").textContent.trim();
   const phoneticEl = card.querySelector(".vocab-phonetic");
-  const phonetic = phoneticEl ? phoneticEl.textContent.replace(/^\//, "").replace(/\/$/, "").trim() : "";
+  const phonetic = phoneticEl
+    ? phoneticEl.textContent.replace(/^\//, "").replace(/\/$/, "").trim()
+    : "";
+  const posEl = card.querySelector(".vocab-pos");
+  const pos = posEl ? posEl.textContent.trim() : "";
+  const pastTenseEl = card.querySelector(".vocab-past-tense");
+  const pastTense = pastTenseEl
+    ? pastTenseEl.textContent.replace(/^过去式：/, "").trim()
+    : "";
+  const pastParticipleEl = card.querySelector(".vocab-past-participle");
+  const pastParticiple = pastParticipleEl
+    ? pastParticipleEl.textContent.replace(/^过去分词：/, "").trim()
+    : "";
   const translationEl = card.querySelector(".vocab-translation");
   const translation = translationEl ? translationEl.textContent.trim() : "";
   const notesEl = card.querySelector(".vocab-notes");
@@ -71,7 +145,16 @@ async function editVocabFromList(vocabId) {
     if (badge.textContent.includes("听不懂")) labels.push("cannot_understand");
   });
 
-  const result = await showVocabForm({ word, phonetic, translation, notes, labels });
+  const result = await showVocabForm({
+    word,
+    phonetic,
+    pos,
+    past_tense: pastTense,
+    past_participle: pastParticiple,
+    translation,
+    notes,
+    labels,
+  });
   if (!result) return;
 
   const res = await fetch(`/api/vocabulary/${vocabId}`, {
@@ -80,6 +163,9 @@ async function editVocabFromList(vocabId) {
     body: JSON.stringify({
       word: result.word,
       phonetic: result.phonetic,
+      pos: result.pos,
+      past_tense: result.past_tense,
+      past_participle: result.past_participle,
       translation: result.translation,
       notes: result.notes,
       labels: result.labels,
@@ -94,7 +180,16 @@ async function editVocabFromList(vocabId) {
 
 // ========== 生词表单（带查询去重） ==========
 function showVocabForm(
-  defaults = { word: "", phonetic: "", translation: "", notes: "", labels: [] },
+  defaults = {
+    word: "",
+    phonetic: "",
+    pos: "",
+    past_tense: "",
+    past_participle: "",
+    translation: "",
+    notes: "",
+    labels: [],
+  },
 ) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -108,7 +203,12 @@ function showVocabForm(
             <button class="btn-secondary btn-small btn-lookup" type="button">查询</button>
           </div>
           <input type="text" class="inline-modal-input vocab-form-phonetic" placeholder="音标（可留空）" value="${defaults.phonetic}" />
-          <input type="text" class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空）" value="${defaults.translation}" />
+          <input type="text" class="inline-modal-input vocab-form-pos" placeholder="词性（如 verb/noun/adj，可留空）" value="${defaults.pos}" />
+          <div class="vocab-form-tense-row">
+            <input type="text" class="inline-modal-input vocab-form-past-tense" placeholder="过去式（可留空）" value="${defaults.past_tense}" />
+            <input type="text" class="inline-modal-input vocab-form-past-participle" placeholder="过去分词（可留空）" value="${defaults.past_participle}" />
+          </div>
+          <textarea class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空，多个含义用分号分隔）" rows="2">${defaults.translation}</textarea>
           <textarea class="inline-modal-input vocab-form-notes" placeholder="备注（可留空）" rows="2">${defaults.notes}</textarea>
           <div class="vocab-form-hint" style="display:none;"></div>
         </div>
@@ -122,6 +222,11 @@ function showVocabForm(
 
     const wordInput = overlay.querySelector(".vocab-form-word");
     const phoneticInput = overlay.querySelector(".vocab-form-phonetic");
+    const posInput = overlay.querySelector(".vocab-form-pos");
+    const pastTenseInput = overlay.querySelector(".vocab-form-past-tense");
+    const pastParticipleInput = overlay.querySelector(
+      ".vocab-form-past-participle",
+    );
     const translationInput = overlay.querySelector(".vocab-form-translation");
     const notesInput = overlay.querySelector(".vocab-form-notes");
     const hintEl = overlay.querySelector(".vocab-form-hint");
@@ -140,6 +245,9 @@ function showVocabForm(
         const data = await res.json();
         if (data.found) {
           phoneticInput.value = data.phonetic;
+          posInput.value = data.pos;
+          pastTenseInput.value = data.past_tense;
+          pastParticipleInput.value = data.past_participle;
           translationInput.value = data.translation;
           if (data.notes) notesInput.value = data.notes;
           hintEl.textContent = `已找到已有生词"${word}"，已自动填充`;
@@ -165,6 +273,10 @@ function showVocabForm(
         );
         const lookupData = await lookupRes.json();
         if (lookupData.phonetic) phoneticInput.value = lookupData.phonetic;
+        if (lookupData.pos) posInput.value = lookupData.pos;
+        if (lookupData.past_tense) pastTenseInput.value = lookupData.past_tense;
+        if (lookupData.past_participle)
+          pastParticipleInput.value = lookupData.past_participle;
         if (lookupData.translation)
           translationInput.value = lookupData.translation;
         hintEl.style.display = "none";
@@ -186,6 +298,9 @@ function showVocabForm(
       close({
         word,
         phonetic: phoneticInput.value.trim(),
+        pos: posInput.value.trim(),
+        past_tense: pastTenseInput.value.trim(),
+        past_participle: pastParticipleInput.value.trim(),
         translation: translationInput.value.trim(),
         notes: notesInput.value.trim(),
         labels: defaults.labels || [],
@@ -218,7 +333,10 @@ async function deleteVocab(id) {
 
 // 删除听写
 async function deleteDictation(id) {
-  if (!(await showInlineConfirm("确认删除该听写？所有卡片和关联生词将一并删除。"))) return;
+  if (
+    !(await showInlineConfirm("确认删除该听写？所有卡片和关联生词将一并删除。"))
+  )
+    return;
   const res = await fetch(`/api/dictations/${id}`, { method: "DELETE" });
   if (res.ok) {
     window.location.reload();

@@ -31,18 +31,18 @@ block content %}
       <div class="list-item-drag-handle" title="拖拽排序">⋮⋮</div>
       <div class="list-item-main">
         <h3>{{ d.title }}</h3>
+        <div class="list-item-meta">
+          <span class="time">{{ d.created_at.strftime('%Y-%m-%d') }}</span>
+          <span class="card-count">{{ d.cards|length }} 张卡片</span>
+        </div>
       </div>
-      <div class="list-item-meta">
-        <span class="time">{{ d.created_at.strftime('%Y-%m-%d') }}</span>
-        <span class="card-count">{{ d.cards|length }} 张卡片</span>
-        <button
-          class="btn-icon btn-delete"
-          onclick="event.preventDefault(); event.stopPropagation(); deleteDictation({{ d.id }})"
-          title="删除"
-        >
-          ×
-        </button>
-      </div>
+      <button
+        class="btn-icon btn-delete"
+        onclick="event.preventDefault(); event.stopPropagation(); deleteDictation({{ d.id }})"
+        title="删除"
+      >
+        ×
+      </button>
     </a>
     {% endfor %} {% else %}
     <div class="empty-state">

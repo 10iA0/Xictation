@@ -1,0 +1,297 @@
+{% extends "base.html" %} {% block title %}API 设置 - Xictation{% endblock %} {%
+block content %}
+<div class="api-settings-page">
+  <h2 class="page-title">DeepSeek API 设置</h2>
+
+  <div class="api-card">
+    <div class="api-status" id="apiStatus">
+      <div class="api-status-icon" id="apiStatusIcon">?</div>
+      <div class="api-status-text">
+        <div id="apiStatusTitle">加载中...</div>
+        <div id="apiStatusDesc" class="api-status-desc"></div>
+      </div>
+    </div>
+
+    <div class="api-form">
+      <label for="apiKeyInput">DeepSeek API Key</label>
+      <div class="api-input-row">
+        <input
+          type="password"
+          id="apiKeyInput"
+          placeholder="sk-xxxxxxxxxxxxxxxxxxxx"
+          autocomplete="off"
+        />
+        <button
+          type="button"
+          class="btn-outline btn-toggle"
+          id="btnToggle"
+          onclick="toggleKeyVisibility()"
+        >
+          显示
+        </button>
+      </div>
+      <small class="api-hint">
+        用于查询单词音标/翻译、翻译正确内容。Key
+        仅保存在你的账号下，其他用户不可见。 请前往
+        <a
+          href="https://platform.deepseek.com/api_keys"
+          target="_blank"
+          rel="noopener"
+          >DeepSeek 平台</a
+        >
+        获取。
+      </small>
+    </div>
+
+    <div class="api-actions">
+      <button class="btn-primary" id="btnSave" onclick="saveKey()">保存</button>
+      <button class="btn-outline" id="btnTest" onclick="testKey()">
+        测试连接
+      </button>
+      <button class="btn-danger" id="btnClear" onclick="clearKey()">
+        清除
+      </button>
+    </div>
+
+    <div class="api-test-result" id="testResult" style="display: none"></div>
+  </div>
+</div>
+
+<style>
+  .api-settings-page {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .api-card {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    border: 1px solid var(--color-border);
+  }
+  .api-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-bg);
+    margin-bottom: 20px;
+  }
+  .api-status-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    background-color: var(--color-text-secondary);
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .api-status-icon.ok {
+    background-color: #38a169;
+  }
+  .api-status-icon.warn {
+    background-color: #dd6b20;
+  }
+  .api-status-text {
+    flex: 1;
+  }
+  .api-status-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+    word-break: break-all;
+  }
+  .api-form {
+    margin-bottom: 20px;
+  }
+  .api-form label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .api-input-row {
+    display: flex;
+    gap: 8px;
+  }
+  .api-input-row input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: monospace;
+  }
+  .api-input-row input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+  .btn-toggle {
+    padding: 10px 14px;
+    white-space: nowrap;
+  }
+  .api-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+  .api-hint a {
+    color: var(--color-primary);
+  }
+  .api-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .api-test-result {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .api-test-result.success {
+    background-color: #f0fff4;
+    color: #22543d;
+    border: 1px solid #9ae6b4;
+  }
+  .api-test-result.error {
+    background-color: #fff5f5;
+    color: #742a2a;
+    border: 1px solid #feb2b2;
+  }
+  .api-test-result.warn {
+    background-color: #fffaf0;
+    color: #744210;
+    border: 1px solid #fbd38d;
+  }
+</style>
+
+<script>
+  let currentMasked = "";
+
+  async function loadStatus() {
+    try {
+      const res = await fetch("/api/user/api-key");
+      const data = await res.json();
+      updateStatus(data.has_key, data.masked);
+    } catch (e) {
+      updateStatus(false, "");
+    }
+  }
+
+  function updateStatus(hasKey, masked) {
+    const icon = document.getElementById("apiStatusIcon");
+    const title = document.getElementById("apiStatusTitle");
+    const desc = document.getElementById("apiStatusDesc");
+    currentMasked = masked || "";
+    if (hasKey) {
+      icon.textContent = "✓";
+      icon.className = "api-status-icon ok";
+      title.textContent = "已配置 API Key";
+      desc.textContent = "当前 Key：" + masked;
+    } else {
+      icon.textContent = "!";
+      icon.className = "api-status-icon warn";
+      title.textContent = "未配置 API Key";
+      desc.textContent =
+        "查询/翻译功能将不可用，请在下方填入你的 DeepSeek API Key";
+    }
+  }
+
+  function toggleKeyVisibility() {
+    const input = document.getElementById("apiKeyInput");
+    const btn = document.getElementById("btnToggle");
+    if (input.type === "password") {
+      input.type = "text";
+      btn.textContent = "隐藏";
+    } else {
+      input.type = "password";
+      btn.textContent = "显示";
+    }
+  }
+
+  async function saveKey() {
+    const apiKey = document.getElementById("apiKeyInput").value.trim();
+    if (!apiKey) {
+      showToast("请输入 API Key");
+      return;
+    }
+    try {
+      const res = await fetch("/api/user/api-key", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "保存失败");
+        return;
+      }
+      showToast("已保存");
+      document.getElementById("apiKeyInput").value = "";
+      loadStatus();
+    } catch (e) {
+      showToast("网络错误");
+    }
+  }
+
+  async function clearKey() {
+    if (!(await showInlineConfirm("确认清除已保存的 API Key？"))) return;
+    try {
+      const res = await fetch("/api/user/api-key", { method: "DELETE" });
+      if (res.ok) {
+        showToast("已清除");
+        loadStatus();
+      } else {
+        showToast("清除失败");
+      }
+    } catch (e) {
+      showToast("网络错误");
+    }
+  }
+
+  async function testKey() {
+    const resultEl = document.getElementById("testResult");
+    const apiKey = document.getElementById("apiKeyInput").value.trim();
+    resultEl.style.display = "block";
+    resultEl.className = "api-test-result warn";
+    resultEl.textContent = "正在测试连接...";
+    try {
+      const res = await fetch(
+        `/api/vocabulary/lookup?word=hello${apiKey ? "&__test=1" : ""}`,
+      );
+      const data = await res.json();
+      if (res.ok && data.translation) {
+        resultEl.className = "api-test-result success";
+        resultEl.textContent = `连接成功！测试结果：hello → ${data.translation}`;
+      } else if (
+        res.status === 402 ||
+        (data.detail && data.detail.includes("余额"))
+      ) {
+        resultEl.className = "api-test-result error";
+        resultEl.textContent =
+          data.detail || "DeepSeek API 余额不足，请充值后重试";
+      } else if (res.status === 401) {
+        resultEl.className = "api-test-result error";
+        resultEl.textContent = data.detail || "API Key 无效，请检查";
+      } else {
+        resultEl.className = "api-test-result error";
+        resultEl.textContent = data.detail || "测试失败";
+      }
+    } catch (e) {
+      resultEl.className = "api-test-result error";
+      resultEl.textContent = "网络错误：" + e.message;
+    }
+  }
+
+  loadStatus();
+</script>
+{% endblock %}

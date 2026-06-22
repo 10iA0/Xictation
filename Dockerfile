@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+ARG PYTHON_IMAGE=python:3.12-bookworm
+FROM ${PYTHON_IMAGE}
 
 WORKDIR /app
 
@@ -9,7 +10,9 @@ RUN apt-get update && \
 
 # 复制依赖文件并安装
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set global.trusted-host mirrors.aliyun.com && \
+    pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY app/ ./app/

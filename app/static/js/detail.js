@@ -3,6 +3,41 @@
 const container = document.querySelector(".detail-container");
 const dictationId = container?.dataset.dictationId || null;
 
+// ========== 移动端检测 ==========
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
+// ========== 移动端覆盖层管理 ==========
+function openMobileOverlay(rightCards, title, closeCallback) {
+  if (!rightCards) return;
+  // 移除已有的覆盖层头部
+  rightCards
+    .querySelectorAll(".mobile-overlay-header")
+    .forEach((el) => el.remove());
+  // 插入新的覆盖层头部
+  const header = document.createElement("div");
+  header.className = "mobile-overlay-header";
+  header.innerHTML = `
+    <span class="mobile-overlay-title">${title}</span>
+    <button class="mobile-overlay-close" title="关闭">×</button>
+  `;
+  header.querySelector(".mobile-overlay-close").onclick = () => {
+    closeCallback();
+  };
+  rightCards.insertBefore(header, rightCards.firstChild);
+  rightCards.classList.add("mobile-open");
+}
+
+function closeMobileOverlay(rightCards) {
+  if (!rightCards) return;
+  rightCards.classList.remove("mobile-open");
+  // 移除覆盖层头部
+  rightCards
+    .querySelectorAll(".mobile-overlay-header")
+    .forEach((el) => el.remove());
+}
+
 // ========== 听写记录自动保存（已有听写时） ==========
 let headerSaveTimer = null;
 
@@ -198,6 +233,137 @@ async function deleteCard(cardId) {
   }
 }
 
+// ========== 卡片复制/剪切/粘贴 ==========
+async function copyCard(cardId) {
+  const res = await fetch(`/api/cards/${cardId}/copy`, { method: "POST" });
+  if (res.ok) {
+    const data = await res.json();
+    showToast("已复制" + (data.word ? `："${data.word}..."` : ""));
+    updatePasteButton();
+  } else {
+    showToast("复制失败");
+  }
+}
+
+async function cutCard(cardId) {
+  if (!(await showInlineConfirm("确认剪切该卡片？"))) return;
+  const res = await fetch(`/api/cards/${cardId}/cut`, { method: "POST" });
+  if (res.ok) {
+    const data = await res.json();
+    showToast("已剪切" + (data.word ? `："${data.word}..."` : ""));
+    document.querySelector(`.card-row[data-card-id="${cardId}"]`)?.remove();
+    updatePasteButton();
+  } else {
+    showToast("剪切失败");
+  }
+}
+
+async function pasteCard() {
+  if (!dictationId) {
+    showToast("请先保存听写记录");
+    return;
+  }
+  const res = await fetch(`/api/dictations/${dictationId}/paste`, {
+    method: "POST",
+  });
+  if (res.ok) {
+    showToast("粘贴成功");
+    window.location.reload();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || "粘贴失败");
+  }
+}
+
+async function updatePasteButton() {
+  const btn = document.querySelector(".btn-paste");
+  if (!btn) return;
+  try {
+    const res = await fetch("/api/clipboard");
+    const data = await res.json();
+    if (data.empty) {
+      btn.style.display = "none";
+    } else {
+      btn.style.display = "inline-block";
+      btn.textContent = `粘贴卡片${data.preview ? `（${data.preview}...）` : ""}`;
+    }
+  } catch (e) {
+    // 忽略
+  }
+}
+
+// 页面加载时检查剪贴板状态
+document.addEventListener("DOMContentLoaded", updatePasteButton);
+
+// ========== 左侧听写卡片跟随滚动 ==========
+function initStickyLeftCards() {
+  // 移动端不需要 sticky 行为
+  if (isMobile()) return;
+  function update() {
+    document.querySelectorAll(".card-row").forEach((row) => {
+      const dictCard = row.querySelector(".dict-card");
+      const rightCards = row.querySelector(".right-cards");
+      if (!dictCard || !rightCards) return;
+
+      const cardHeight = dictCard.offsetHeight;
+      const rightHeight = rightCards.offsetHeight;
+
+      // 右列不比左列高，不需要 sticky
+      if (rightHeight <= cardHeight) {
+        dictCard.style.position = "";
+        dictCard.style.top = "";
+        return;
+      }
+
+      const viewportH = window.innerHeight;
+      const offset = 10;
+
+      // 卡片本身比视口高，固定在顶部即可
+      if (cardHeight + offset * 2 >= viewportH) {
+        dictCard.style.position = "sticky";
+        dictCard.style.top = offset + "px";
+        return;
+      }
+
+      const rowRect = row.getBoundingClientRect();
+      const rowTop = rowRect.top;
+      const rowBottom = rowRect.bottom;
+
+      // 行完全在视口外，不处理
+      if (rowBottom < 0 || rowTop > viewportH) return;
+
+      // 行顶部还在视口内（没滚出顶部），不需要 sticky
+      if (rowTop > offset) {
+        dictCard.style.position = "";
+        dictCard.style.top = "";
+        return;
+      }
+
+      // 行顶部已滚出视口顶部，固定在顶部
+      dictCard.style.position = "sticky";
+      dictCard.style.top = offset + "px";
+    });
+  }
+
+  let ticking = false;
+  function onScroll() {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        update();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+  document.addEventListener("DOMContentLoaded", update);
+  update();
+}
+
+document.addEventListener("DOMContentLoaded", initStickyLeftCards);
+
 // ========== 卡片拖拽排序 ==========
 function initCardDragSort() {
   const container = document.getElementById("cards-container");
@@ -208,7 +374,11 @@ function initCardDragSort() {
     const item = e.target.closest(".card-row");
     if (!item) return;
     // 不从分析卡片/结构卡片内部发起拖拽
-    if (e.target.closest(".analysis-card, .structure-card, textarea, input, button")) {
+    if (
+      e.target.closest(
+        ".analysis-card, .structure-card, textarea, input, button",
+      )
+    ) {
       e.preventDefault();
       return;
     }
@@ -236,7 +406,11 @@ function initCardDragSort() {
   container.addEventListener("dragover", (e) => {
     e.preventDefault();
     if (!draggedItem) return;
-    const afterElement = getCardDragAfterElement(container, draggedItem, e.clientY);
+    const afterElement = getCardDragAfterElement(
+      container,
+      draggedItem,
+      e.clientY,
+    );
     if (afterElement == null) {
       container.appendChild(draggedItem);
     } else {
@@ -262,28 +436,178 @@ function getCardDragAfterElement(container, draggedItem, y) {
 
 document.addEventListener("DOMContentLoaded", initCardDragSort);
 
+// ========== 页面加载时初始化已显示的卡片 ==========
+function initVisibleCards() {
+  document.querySelectorAll(".card-row").forEach((cardRow) => {
+    const analysisCard = cardRow.querySelector(".analysis-card");
+    const analysisBtn = cardRow.querySelector(".btn-analysis");
+    const structureCard = cardRow.querySelector(".structure-card");
+    const structureBtn = cardRow.querySelector(".btn-toggle-extra");
+
+    // 移动端：页面加载时隐藏右侧卡片，不自动弹出覆盖层
+    if (isMobile()) {
+      const rightCards = cardRow.querySelector(".right-cards");
+      if (rightCards) rightCards.classList.remove("mobile-open");
+      if (analysisCard && analysisCard.style.display !== "none") {
+        analysisCard.style.display = "none";
+        if (analysisBtn) analysisBtn.classList.remove("btn-disabled");
+      }
+      if (structureCard && structureCard.style.display !== "none") {
+        structureCard.style.display = "none";
+        if (structureBtn) {
+          structureBtn.classList.remove("btn-disabled");
+          structureBtn.disabled = false;
+        }
+      }
+    } else {
+      // PC端：有内容的卡片始终展开，忽略用户关闭状态
+      // 分析卡片：如果 DOM 中存在分析卡片，说明有内容，强制展开
+      if (analysisCard && analysisCard.style.display === "none") {
+        analysisCard.style.display = "block";
+        if (analysisBtn) analysisBtn.classList.add("btn-disabled");
+      } else if (analysisCard && analysisBtn) {
+        analysisBtn.classList.add("btn-disabled");
+      }
+
+      // 结构卡片：如果有翻译或分析内容，强制展开
+      const translationInput = cardRow.querySelector(".card-translation-input");
+      const analysisInput = cardRow.querySelector(".card-analysis-input");
+      const hasStructureContent =
+        (translationInput && translationInput.value.trim()) ||
+        (analysisInput && analysisInput.value.trim());
+      if (structureCard && hasStructureContent) {
+        structureCard.style.display = "block";
+        if (structureBtn) {
+          structureBtn.classList.add("btn-disabled");
+          structureBtn.disabled = true;
+        }
+        initStructureDisplayMode(cardRow);
+      } else if (structureCard && structureCard.style.display !== "none") {
+        // 无内容但已展开：初始化展示模式
+        if (structureBtn) {
+          structureBtn.classList.add("btn-disabled");
+          structureBtn.disabled = true;
+        }
+      }
+    }
+
+    // 为听写内容和正确内容的 textarea 绑定 blur 自动保存
+    const cardId2 = cardRow.dataset.cardId;
+    const contentInput = cardRow.querySelector(".card-content-input");
+    const correctInput = cardRow.querySelector(".correct-content-input");
+    if (contentInput) {
+      contentInput.addEventListener("blur", () => autoSaveCard(cardId2));
+    }
+    if (correctInput) {
+      correctInput.addEventListener("blur", () => autoSaveCard(cardId2));
+    }
+  });
+}
+document.addEventListener("DOMContentLoaded", initVisibleCards);
+
+// ========== 卡片自动保存（blur 时触发） ==========
+let autoSaveTimers = {};
+function autoSaveCard(cardId) {
+  // 延迟 300ms 执行，避免连续 blur（如从 content 跳到 correct）触发多次
+  clearTimeout(autoSaveTimers[cardId]);
+  autoSaveTimers[cardId] = setTimeout(async () => {
+    const cardRow = document.querySelector(
+      `.card-row[data-card-id="${cardId}"]`,
+    );
+    if (!cardRow) return;
+    const contentInput = cardRow.querySelector(".card-content-input");
+    const correctInput = cardRow.querySelector(".correct-content-input");
+    if (!contentInput || !correctInput) return;
+    // 只有在编辑模式（textarea 可见）时才自动保存
+    if (contentInput.style.display === "none") return;
+    const content = contentInput.value;
+    const correctContent = correctInput.value;
+    try {
+      await fetch(`/api/cards/${cardId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, correct_content: correctContent }),
+      });
+    } catch (e) {
+      // 静默失败
+    }
+  }, 300);
+}
+
+// ========== 结构卡片自动保存（blur 时触发） ==========
+let structureSaveTimers = {};
+function autoSaveStructure(cardId) {
+  // 延迟 300ms 执行，避免连续 blur（如从翻译跳到分析）触发多次
+  clearTimeout(structureSaveTimers[cardId]);
+  structureSaveTimers[cardId] = setTimeout(async () => {
+    const cardRow = document.querySelector(
+      `.card-row[data-card-id="${cardId}"]`,
+    );
+    if (!cardRow) return;
+    const translationInput = cardRow.querySelector(".card-translation-input");
+    const analysisInput = cardRow.querySelector(".card-analysis-input");
+    if (!translationInput && !analysisInput) return;
+    // 只有在编辑模式（输入框可见）时才自动保存
+    if (translationInput && translationInput.style.display === "none") return;
+    const translation = translationInput ? translationInput.value : "";
+    const analysis = analysisInput ? analysisInput.value : "";
+    try {
+      await fetch(`/api/cards/${cardId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ translation, analysis }),
+      });
+    } catch (e) {
+      // 静默失败
+    }
+  }, 300);
+}
+
 // ========== 结构卡片展开/收起 ==========
 function toggleExtra(btn) {
   const cardRow = btn.closest(".card-row");
   if (!cardRow) return;
+  const cardId = cardRow.dataset.cardId;
   const structureCard = cardRow.querySelector(".structure-card");
+  const rightCards = cardRow.querySelector(".right-cards");
   if (!structureCard) return;
-  structureCard.style.display = "block";
-  // 按钮变灰
-  btn.classList.add("btn-disabled");
-  btn.disabled = true;
 
-  // 根据内容初始化模式
-  const translationInput = cardRow.querySelector(".card-translation-input");
-  const analysisInput = cardRow.querySelector(".card-analysis-input");
-  const hasContent =
-    (translationInput && translationInput.value.trim()) ||
-    (analysisInput && analysisInput.value.trim());
-  if (hasContent) {
-    initStructureDisplayMode(cardRow);
+  // 切换显示/隐藏
+  const isHidden = structureCard.style.display === "none";
+  structureCard.style.display = isHidden ? "block" : "none";
+
+  if (isHidden) {
+    // 打开：按钮变灰
+    btn.classList.add("btn-disabled");
+    btn.disabled = true;
+    // 移动端：弹出覆盖层
+    if (isMobile() && rightCards) {
+      openMobileOverlay(rightCards, "结构分析", () => closeStructure(cardId));
+    }
+    // 根据内容初始化模式
+    const translationInput = cardRow.querySelector(".card-translation-input");
+    const analysisInput = cardRow.querySelector(".card-analysis-input");
+    const hasContent =
+      (translationInput && translationInput.value.trim()) ||
+      (analysisInput && analysisInput.value.trim());
+    if (hasContent) {
+      initStructureDisplayMode(cardRow);
+    } else {
+      initStructureEditMode(cardRow);
+    }
   } else {
-    initStructureEditMode(cardRow);
+    // 关闭：恢复按钮
+    btn.classList.remove("btn-disabled");
+    btn.disabled = false;
+    // 移动端：关闭覆盖层
+    if (isMobile() && rightCards) closeMobileOverlay(rightCards);
   }
+  // 保存可见性状态
+  fetch(`/api/cards/${cardId}/visibility`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ structure_card_visible: isHidden ? 1 : 0 }),
+  });
 }
 
 function closeStructure(cardId) {
@@ -297,6 +621,15 @@ function closeStructure(cardId) {
     btn.classList.remove("btn-disabled");
     btn.disabled = false;
   }
+  // 移动端：关闭覆盖层
+  const rightCards = cardRow.querySelector(".right-cards");
+  if (isMobile() && rightCards) closeMobileOverlay(rightCards);
+  // 保存可见性状态
+  fetch(`/api/cards/${cardId}/visibility`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ structure_card_visible: 0 }),
+  });
 }
 
 function initStructureEditMode(cardRow) {
@@ -307,8 +640,24 @@ function initStructureEditMode(cardRow) {
   const translateBtn = cardRow.querySelector(".btn-translate");
   const saveBtn = cardRow.querySelector(".btn-save-structure");
 
-  if (translationInput) translationInput.style.display = "block";
-  if (analysisInput) analysisInput.style.display = "block";
+  if (translationInput) {
+    translationInput.style.display = "block";
+    if (!translationInput.dataset.autoSaveBound) {
+      translationInput.addEventListener("blur", () =>
+        autoSaveStructure(cardRow.dataset.cardId),
+      );
+      translationInput.dataset.autoSaveBound = "true";
+    }
+  }
+  if (analysisInput) {
+    analysisInput.style.display = "block";
+    if (!analysisInput.dataset.autoSaveBound) {
+      analysisInput.addEventListener("blur", () =>
+        autoSaveStructure(cardRow.dataset.cardId),
+      );
+      analysisInput.dataset.autoSaveBound = "true";
+    }
+  }
   if (translationDisplay) translationDisplay.style.display = "none";
   if (analysisDisplay) analysisDisplay.style.display = "none";
   if (translateBtn) translateBtn.style.display = "";
@@ -462,16 +811,20 @@ async function translateCard(cardId) {
   translateBtn.disabled = true;
 
   try {
-    const res = await fetch(`/api/cards/${cardId}/translate`, { method: "POST" });
+    const res = await fetch(`/api/cards/${cardId}/translate`, {
+      method: "POST",
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showToast(err.detail || "翻译失败");
+      handleDeepSeekError(res, err);
       return;
     }
     const data = await res.json();
     if (data.translation) {
       const translationInput = cardRow.querySelector(".card-translation-input");
-      const translationDisplay = cardRow.querySelector(".card-translation-display");
+      const translationDisplay = cardRow.querySelector(
+        ".card-translation-display",
+      );
       if (translationInput) translationInput.value = data.translation;
       if (translationDisplay) translationDisplay.textContent = data.translation;
       showToast("翻译完成，点击保存以持久化");
@@ -483,6 +836,20 @@ async function translateCard(cardId) {
   } finally {
     translateBtn.textContent = originalText;
     translateBtn.disabled = false;
+  }
+}
+
+// 统一处理 DeepSeek 调用失败的提示
+function handleDeepSeekError(res, err) {
+  const detail = err.detail || "调用失败";
+  if (res.status === 402 || err.balance_insufficient) {
+    showToast(`余额不足：${detail}。请前往 DeepSeek 平台充值`);
+  } else if (res.status === 400 || err.no_key) {
+    showToast(`${detail}（点击右上角「API 设置」配置）`);
+  } else if (res.status === 401) {
+    showToast(`API Key 无效：${detail}`);
+  } else {
+    showToast(detail);
   }
 }
 
@@ -583,15 +950,21 @@ function diffWords(a, b) {
       // 听写侧：所有内容 + 空占位放在一个 span 中，背景融合为一笔
       let aHtml = aWords.map(escapeHtml).join("");
       if (aCount < bCount) {
-        for (let x = 0; x < bCount - aCount; x++) aHtml += "&nbsp;";
+        // 根据正确侧缺失单词的实际长度补位，使空缺宽度匹配
+        const missingWords = bNonSpace.slice(aCount);
+        for (const w of missingWords) {
+          // 每个缺失单词的长度 + 1 个空格间隔
+          aHtml += "&nbsp;".repeat(Math.max(w.length, 1)) + "&nbsp;";
+        }
       }
       originalParts.push(`<span class="compare-wrong">${aHtml}</span>`);
 
       // 正确侧：正常显示，补白色空占位
       let bHtml = bWords.map(escapeHtml).join("");
       if (bCount < aCount) {
-        for (let x = 0; x < aCount - bCount; x++) {
-          bHtml += `<span class="compare-empty">&nbsp;</span>`;
+        const missingWords = aNonSpace.slice(bCount);
+        for (const w of missingWords) {
+          bHtml += `<span class="compare-empty">${"&nbsp;".repeat(Math.max(w.length, 1))}&nbsp;</span>`;
         }
       }
       correctParts.push(bHtml);
@@ -602,19 +975,15 @@ function diffWords(a, b) {
 }
 
 function escapeHtml(s) {
-  if (s === " ") return "&nbsp;";
-  if (s === "\n") return "<br>";
-  return s.replace(
-    /[&<>"']/g,
-    (c) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      })[c],
-  );
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\r\n/g, "&nbsp;")
+    .replace(/\r/g, "")
+    .replace(/\n/g, "&nbsp;");
 }
 
 // ========== 文本标注 ==========
@@ -696,6 +1065,7 @@ async function applyAnnotation(btn, type) {
   const cardId = block.dataset.cardId;
   let value = null;
   let annType = type;
+  const selectedText = textarea.value.slice(start, end);
 
   if (type === "color") {
     // 颜色按钮：弹出两行选择器（字体+背景）
@@ -717,6 +1087,7 @@ async function applyAnnotation(btn, type) {
       field: "correct_content",
       start_offset: start,
       end_offset: end,
+      text_content: selectedText,
       annotation_type: annType,
       annotation_value: value,
     }),
@@ -751,6 +1122,24 @@ function showAnnotationPreview(cardId, block) {
   renderAnnotations(cardId, block);
 }
 
+// 在文本中搜索 substring 的所有出现位置，返回最接近 originalOffset 的那个
+function findNearestOccurrence(text, substring, originalOffset) {
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  let searchFrom = 0;
+  while (true) {
+    const idx = text.indexOf(substring, searchFrom);
+    if (idx === -1) break;
+    const dist = Math.abs(idx - originalOffset);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = idx;
+    }
+    searchFrom = idx + 1;
+  }
+  return bestIdx;
+}
+
 // 渲染标注到展示模式
 function renderAnnotations(cardId, block) {
   const display = block.querySelector(".correct-content-display");
@@ -766,21 +1155,43 @@ function renderAnnotations(cardId, block) {
       const text = textarea.value;
       const annotations = data.annotations || [];
       if (annotations.length === 0) {
-        display.innerHTML = "";
-        // 如果是预览模式且有标注被清空，隐藏预览区
+        // 非编辑模式下不清空（保留 diffWords 的结果），仅编辑模式清空预览区
         if (display.classList.contains("annotation-preview-live")) {
+          display.innerHTML = "";
           display.style.display = "none";
         }
         return;
       }
 
+      // 使用 text_content 动态定位标注位置
+      // 对每个标注，如果存了 text_content，就在当前文本中搜索最接近原始 offset 的出现位置
+      const resolvedAnnotations = annotations.map((ann) => {
+        if (ann.text_content && ann.text_content.length > 0) {
+          // 在当前文本中搜索标注内容，找到最接近原始 offset 的出现位置
+          const bestIdx = findNearestOccurrence(
+            text,
+            ann.text_content,
+            ann.start_offset,
+          );
+          if (bestIdx !== -1) {
+            return {
+              ...ann,
+              start_offset: bestIdx,
+              end_offset: bestIdx + ann.text_content.length,
+            };
+          }
+        }
+        // 回退到原始 offset
+        return ann;
+      });
+
       // 按位置排序
-      annotations.sort((a, b) => a.start_offset - b.start_offset);
+      resolvedAnnotations.sort((a, b) => a.start_offset - b.start_offset);
 
       // 将文本按标注分段
       const segments = [];
       const boundaries = new Set([0, text.length]);
-      for (const ann of annotations) {
+      for (const ann of resolvedAnnotations) {
         boundaries.add(ann.start_offset);
         boundaries.add(ann.end_offset);
       }
@@ -791,7 +1202,7 @@ function renderAnnotations(cardId, block) {
         const segEnd = sortedBounds[i + 1];
         if (segStart >= segEnd) continue;
         const segText = text.slice(segStart, segEnd);
-        const segAnns = annotations.filter(
+        const segAnns = resolvedAnnotations.filter(
           (a) => a.start_offset <= segStart && a.end_offset >= segEnd,
         );
         segments.push({ text: segText, annotations: segAnns });
@@ -880,27 +1291,127 @@ function renderAnnotations(cardId, block) {
         htmlParts.push(wrapped);
       }
 
-      display.innerHTML = htmlParts.join("").replace(/\n/g, "<br>");
+      display.innerHTML = htmlParts.join("");
     });
 }
 
-// ========== 分析错误 ==========
+// ========== 错误分析 ==========
 async function toggleAnalysis(cardId, btn) {
-  if (btn.disabled) return;
   if (!dictationId) {
     showToast("请先保存听写记录");
     return;
   }
 
+  const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
+  const existingCard = cardRow?.querySelector(".analysis-card");
+
+  if (existingCard) {
+    // 已存在：切换显示/隐藏
+    const isHidden = existingCard.style.display === "none";
+    existingCard.style.display = isHidden ? "block" : "none";
+    if (isHidden) {
+      btn.classList.add("btn-disabled");
+      // 移动端：弹出覆盖层
+      const rightCards = cardRow?.querySelector(".right-cards");
+      if (isMobile() && rightCards) {
+        openMobileOverlay(rightCards, "错误分析", () => closeAnalysis(cardId));
+      }
+    } else {
+      btn.classList.remove("btn-disabled");
+      // 移动端：关闭覆盖层
+      const rightCards = cardRow?.querySelector(".right-cards");
+      if (isMobile() && rightCards) closeMobileOverlay(rightCards);
+    }
+    // 保存可见性状态
+    fetch(`/api/cards/${cardId}/visibility`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysis_card_visible: isHidden ? 1 : 0 }),
+    });
+    return;
+  }
+
+  // 不存在：创建（立即禁用按钮，防止重复点击）
+  btn.classList.add("btn-disabled");
   const res = await fetch(`/api/cards/${cardId}/analysis`, { method: "POST" });
   if (res.ok) {
-    // 按钮失效
-    btn.disabled = true;
-    btn.classList.add("btn-disabled");
-    window.location.reload();
+    const data = await res.json();
+    // 动态插入空的分析卡片，避免整页刷新
+    insertAnalysisCard(cardRow, cardId, data.id);
+    // 移动端：弹出覆盖层
+    const rightCards = cardRow?.querySelector(".right-cards");
+    if (isMobile() && rightCards) {
+      openMobileOverlay(rightCards, "错误分析", () => closeAnalysis(cardId));
+    }
+    // 保存可见性状态
+    fetch(`/api/cards/${cardId}/visibility`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysis_card_visible: 1 }),
+    });
   } else {
+    btn.classList.remove("btn-disabled");
     showToast("创建分析卡片失败");
   }
+}
+
+// 动态插入空的分析卡片 DOM
+function insertAnalysisCard(cardRow, cardId, analysisCardId) {
+  const rightCards = cardRow.querySelector(".right-cards");
+  if (!rightCards) return;
+  const html = `
+    <div class="analysis-card" data-card-id="${cardId}" data-analysis-card-id="${analysisCardId}" style="display: block;">
+      <div class="analysis-card-header">
+        <a href="#card-row-${cardId}" class="analysis-source-link" onclick="highlightCard(${cardId})">
+          ← 来自听写卡片
+        </a>
+        <button class="btn-icon btn-delete" onclick="closeAnalysis(${cardId})" title="关闭分析卡片">×</button>
+      </div>
+      <div class="analysis-sections">
+        <div class="analysis-section">
+          <h5>读不懂（生词）</h5>
+          <div class="vocab-list" data-card-id="${cardId}"></div>
+          <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_read')">+ 添加</button>
+        </div>
+        <div class="analysis-section">
+          <h5>听不懂（音标/重音）</h5>
+          <div class="vocab-list" data-card-id="${cardId}"></div>
+          <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_understand')">+ 添加</button>
+        </div>
+        <div class="analysis-section">
+          <h5>听不到（连读/弱读/爆破）</h5>
+          <div class="analysis-records" data-category="cannot_hear" data-card-id="${cardId}"></div>
+          <button class="btn-secondary btn-small" onclick="addAnalysisRecord(${cardId}, 'cannot_hear')">+ 添加</button>
+        </div>
+      </div>
+    </div>
+  `;
+  // 插入到结构卡片之前
+  const structureCard = rightCards.querySelector(".structure-card");
+  if (structureCard) {
+    structureCard.insertAdjacentHTML("beforebegin", html);
+  } else {
+    rightCards.insertAdjacentHTML("beforeend", html);
+  }
+}
+
+function closeAnalysis(cardId) {
+  const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
+  if (!cardRow) return;
+  const analysisCard = cardRow.querySelector(".analysis-card");
+  if (analysisCard) analysisCard.style.display = "none";
+  // 恢复"错误分析"按钮
+  const btn = cardRow.querySelector(".btn-analysis");
+  if (btn) btn.classList.remove("btn-disabled");
+  // 移动端：关闭覆盖层
+  const rightCards = cardRow.querySelector(".right-cards");
+  if (isMobile() && rightCards) closeMobileOverlay(rightCards);
+  // 保存可见性状态
+  fetch(`/api/cards/${cardId}/visibility`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ analysis_card_visible: 0 }),
+  });
 }
 
 async function deleteAnalysisCard(cardId) {
@@ -992,6 +1503,9 @@ async function addVocabFromAnalysis(cardId, dictId, label) {
   const result = await showVocabForm({
     word: "",
     phonetic: "",
+    pos: "",
+    past_tense: "",
+    past_participle: "",
     translation: "",
     notes: "",
     labels: [label],
@@ -1004,6 +1518,9 @@ async function addVocabFromAnalysis(cardId, dictId, label) {
     body: JSON.stringify({
       word: result.word,
       phonetic: result.phonetic,
+      pos: result.pos,
+      past_tense: result.past_tense,
+      past_participle: result.past_participle,
       translation: result.translation,
       notes: result.notes,
       labels: result.labels,
@@ -1048,26 +1565,55 @@ async function editVocab(vocabId, cardId) {
   const phonetic = phoneticEl
     ? phoneticEl.textContent.replace(/^\//, "").replace(/\/$/, "").trim()
     : "";
+  const posEl = item.querySelector(".vocab-pos");
+  const pos = posEl ? posEl.textContent.trim() : "";
+  const pastTenseEl = item.querySelector(".vocab-past-tense");
+  const pastTense = pastTenseEl
+    ? pastTenseEl.textContent.replace(/^过去式：/, "").trim()
+    : "";
+  const pastParticipleEl = item.querySelector(".vocab-past-participle");
+  const pastParticiple = pastParticipleEl
+    ? pastParticipleEl.textContent.replace(/^过去分词：/, "").trim()
+    : "";
   const translationEl = item.querySelector(".vocab-translation");
   const translation = translationEl ? translationEl.textContent.trim() : "";
   const notesEl = item.querySelector(".vocab-notes");
   const notes = notesEl ? notesEl.textContent.trim() : "";
 
   // 检查该单词在哪些分类中出现（同一单词可能在读不懂和听不懂都出现）
-  const allItems = document.querySelectorAll(`.vocab-item[data-id="${vocabId}"]`);
+  const allItems = document.querySelectorAll(
+    `.vocab-item[data-id="${vocabId}"]`,
+  );
   const labels = [];
   allItems.forEach((el) => {
     const section = el.closest(".analysis-section");
     if (section) {
       const h5 = section.querySelector("h5");
-      if (h5 && h5.textContent.includes("读不懂") && !labels.includes("cannot_read"))
+      if (
+        h5 &&
+        h5.textContent.includes("读不懂") &&
+        !labels.includes("cannot_read")
+      )
         labels.push("cannot_read");
-      if (h5 && h5.textContent.includes("听不懂") && !labels.includes("cannot_understand"))
+      if (
+        h5 &&
+        h5.textContent.includes("听不懂") &&
+        !labels.includes("cannot_understand")
+      )
         labels.push("cannot_understand");
     }
   });
 
-  const result = await showVocabForm({ word, phonetic, translation, notes, labels });
+  const result = await showVocabForm({
+    word,
+    phonetic,
+    pos,
+    past_tense: pastTense,
+    past_participle: pastParticiple,
+    translation,
+    notes,
+    labels,
+  });
   if (!result) return;
 
   const res = await fetch(`/api/vocabulary/${vocabId}`, {
@@ -1076,6 +1622,9 @@ async function editVocab(vocabId, cardId) {
     body: JSON.stringify({
       word: result.word,
       phonetic: result.phonetic,
+      pos: result.pos,
+      past_tense: result.past_tense,
+      past_participle: result.past_participle,
       translation: result.translation,
       notes: result.notes,
       labels: result.labels,
@@ -1096,6 +1645,9 @@ function showVocabForm(
   defaults = {
     word: "",
     phonetic: "",
+    pos: "",
+    past_tense: "",
+    past_participle: "",
     translation: "",
     notes: "",
     labels: [],
@@ -1104,6 +1656,12 @@ function showVocabForm(
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "inline-modal-overlay";
+    const readChecked = defaults.labels.includes("cannot_read")
+      ? "checked"
+      : "";
+    const understandChecked = defaults.labels.includes("cannot_understand")
+      ? "checked"
+      : "";
     overlay.innerHTML = `
       <div class="inline-modal">
         <p class="inline-modal-message">生词信息</p>
@@ -1113,8 +1671,17 @@ function showVocabForm(
             <button class="btn-secondary btn-small btn-lookup" type="button">查询</button>
           </div>
           <input type="text" class="inline-modal-input vocab-form-phonetic" placeholder="音标（可留空）" value="${defaults.phonetic}" />
-          <input type="text" class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空）" value="${defaults.translation}" />
+          <input type="text" class="inline-modal-input vocab-form-pos" placeholder="词性（如 verb/noun/adj，可留空）" value="${defaults.pos}" />
+          <div class="vocab-form-tense-row">
+            <input type="text" class="inline-modal-input vocab-form-past-tense" placeholder="过去式（可留空）" value="${defaults.past_tense}" />
+            <input type="text" class="inline-modal-input vocab-form-past-participle" placeholder="过去分词（可留空）" value="${defaults.past_participle}" />
+          </div>
+          <textarea class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空，多个含义用分号分隔）" rows="2">${defaults.translation}</textarea>
           <textarea class="inline-modal-input vocab-form-notes" placeholder="备注（可留空）" rows="2">${defaults.notes}</textarea>
+          <div class="vocab-form-categories">
+            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-read" ${readChecked} /> 看不懂</label>
+            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-understand" ${understandChecked} /> 听不懂</label>
+          </div>
           <div class="vocab-form-hint" style="display:none;"></div>
         </div>
         <div class="inline-modal-buttons">
@@ -1127,6 +1694,11 @@ function showVocabForm(
 
     const wordInput = overlay.querySelector(".vocab-form-word");
     const phoneticInput = overlay.querySelector(".vocab-form-phonetic");
+    const posInput = overlay.querySelector(".vocab-form-pos");
+    const pastTenseInput = overlay.querySelector(".vocab-form-past-tense");
+    const pastParticipleInput = overlay.querySelector(
+      ".vocab-form-past-participle",
+    );
     const translationInput = overlay.querySelector(".vocab-form-translation");
     const notesInput = overlay.querySelector(".vocab-form-notes");
     const hintEl = overlay.querySelector(".vocab-form-hint");
@@ -1145,6 +1717,9 @@ function showVocabForm(
         const searchData = await searchRes.json();
         if (searchData.found) {
           phoneticInput.value = searchData.phonetic;
+          posInput.value = searchData.pos;
+          pastTenseInput.value = searchData.past_tense;
+          pastParticipleInput.value = searchData.past_participle;
           translationInput.value = searchData.translation;
           if (searchData.notes) notesInput.value = searchData.notes;
           hintEl.textContent = `已找到已有生词"${word}"，已自动填充`;
@@ -1168,8 +1743,18 @@ function showVocabForm(
         const lookupRes = await fetch(
           `/api/vocabulary/lookup?word=${encodeURIComponent(word)}`,
         );
+        if (!lookupRes.ok) {
+          const err = await lookupRes.json().catch(() => ({}));
+          handleDeepSeekError(lookupRes, err);
+          hintEl.style.display = "none";
+          return;
+        }
         const lookupData = await lookupRes.json();
         if (lookupData.phonetic) phoneticInput.value = lookupData.phonetic;
+        if (lookupData.pos) posInput.value = lookupData.pos;
+        if (lookupData.past_tense) pastTenseInput.value = lookupData.past_tense;
+        if (lookupData.past_participle)
+          pastParticipleInput.value = lookupData.past_participle;
         if (lookupData.translation)
           translationInput.value = lookupData.translation;
         hintEl.style.display = "none";
@@ -1189,12 +1774,21 @@ function showVocabForm(
         showToast("请输入单词");
         return;
       }
+      // 读取分类选择
+      const labels = [];
+      if (overlay.querySelector(".vocab-cat-read")?.checked)
+        labels.push("cannot_read");
+      if (overlay.querySelector(".vocab-cat-understand")?.checked)
+        labels.push("cannot_understand");
       close({
         word,
         phonetic: phoneticInput.value.trim(),
+        pos: posInput.value.trim(),
+        past_tense: pastTenseInput.value.trim(),
+        past_participle: pastParticipleInput.value.trim(),
         translation: translationInput.value.trim(),
         notes: notesInput.value.trim(),
-        labels: defaults.labels || [],
+        labels,
       });
     };
 

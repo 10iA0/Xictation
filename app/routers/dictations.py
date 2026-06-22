@@ -7,14 +7,32 @@ from typing import Optional
 from app.database import get_db
 from app import models
 from app.templating import templates
+from app.auth import get_current_user_id
 
 router = APIRouter()
+
+
+def get_current_user(request: Request, db: Session) -> models.User | None:
+    """从请求中获取当前用户，未登录返回 None"""
+    user_id = get_current_user_id(request)
+    if not user_id:
+        return None
+    return db.query(models.User).filter_by(id=user_id).first()
+
+
+def require_login(request: Request, db: Session) -> models.User:
+    """要求登录，否则抛出重定向异常"""
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=303, headers={"Location": "/login"})
+    return user
 
 
 @router.get("/dictations", response_class=HTMLResponse)
 async def dictation_list(request: Request, q: Optional[str] = None, db: Session = Depends(get_db)):
     """听写列表页"""
-    query = db.query(models.Dictation)
+    user = require_login(request, db)
+    query = db.query(models.Dictation).filter(models.Dictation.user_id == user.id)
     if q:
         # 搜索标题、内容、标签
         query = query.filter(
@@ -24,33 +42,40 @@ async def dictation_list(request: Request, q: Optional[str] = None, db: Session 
         )
     dictations = query.order_by(models.Dictation.order.asc()).all()
     return templates.TemplateResponse("dictation_list.html", {
-        "request": request, "dictations": dictations, "q": q or ""
+        "request": request, "dictations": dictations, "q": q or "",
+        "current_user": user, "active_tab": "dictations"
     })
 
 
 @router.get("/dictations/new", response_class=HTMLResponse)
-async def dictation_new(request: Request):
+async def dictation_new(request: Request, db: Session = Depends(get_db)):
     """新建听写页"""
+    user = require_login(request, db)
     return templates.TemplateResponse("dictation_detail.html", {
-        "request": request, "dictation": None
+        "request": request, "dictation": None, "current_user": user
     })
 
 
 @router.get("/dictations/{dictation_id}", response_class=HTMLResponse)
 async def dictation_detail(request: Request, dictation_id: int, db: Session = Depends(get_db)):
     """听写详情页"""
-    dictation = db.query(models.Dictation).filter(models.Dictation.id == dictation_id).first()
+    user = require_login(request, db)
+    dictation = db.query(models.Dictation).filter(
+        models.Dictation.id == dictation_id,
+        models.Dictation.user_id == user.id,
+    ).first()
     if not dictation:
         raise HTTPException(status_code=404, detail="听写记录不存在")
     return templates.TemplateResponse("dictation_detail.html", {
-        "request": request, "dictation": dictation,
+        "request": request, "dictation": dictation, "current_user": user
     })
 
 
 @router.get("/vocabulary", response_class=HTMLResponse)
 async def vocabulary_list(request: Request, q: Optional[str] = None, sort: str = "time", db: Session = Depends(get_db)):
     """生词本页"""
-    query = db.query(models.Vocabulary)
+    user = require_login(request, db)
+    query = db.query(models.Vocabulary).filter(models.Vocabulary.user_id == user.id)
     if q:
         query = query.filter(
             (models.Vocabulary.word.ilike(f"%{q}%")) |
@@ -62,5 +87,6 @@ async def vocabulary_list(request: Request, q: Optional[str] = None, sort: str =
     else:
         words = query.order_by(models.Vocabulary.created_at.desc()).all()
     return templates.TemplateResponse("vocabulary.html", {
-        "request": request, "words": words, "q": q or "", "sort": sort
+        "request": request, "words": words, "q": q or "", "sort": sort,
+        "current_user": user, "active_tab": "vocabulary"
     })

@@ -7,7 +7,9 @@
   <!-- 顶部信息区 -->
   <div class="detail-header">
     <div class="detail-header-top">
-      <a href="/dictations" class="btn-text" onclick="return handleBack()">← 返回</a>
+      <a href="/dictations" class="btn-text" onclick="return handleBack();"
+        >← 返回</a
+      >
       {% if not dictation %}
       <button class="btn-primary" onclick="saveDictation()">创建</button>
       {% endif %}
@@ -37,8 +39,12 @@
           <div class="tags-chips" id="tags-chips">
             {% if dictation %} {% for dt in dictation.tags %}
             <span class="tag-chip" data-tag="{{ dt.tag.name }}"
-              >{{ dt.tag.name
-              }}<button class="tag-remove" onclick="removeTag(this)">×</button></span
+              >{{ dt.tag.name }}<button
+                class="tag-remove"
+                onclick="removeTag(this)"
+              >
+                ×
+              </button></span
             >
             {% endfor %} {% endif %}
           </div>
@@ -68,16 +74,10 @@
           <div class="dict-card-toolbar">
             <div class="card-drag-handle" title="拖拽排序">⋮⋮</div>
             <button
-              class="btn-text btn-analysis {% if card.analysis_card %}btn-disabled{% endif %}"
+              class="btn-text btn-analysis"
               onclick="toggleAnalysis({{ card.id }}, this)"
-              {%
-              if
-              card.analysis_card
-              %}disabled{%
-              endif
-              %}"
             >
-              分析错误
+              错误分析
             </button>
             <button
               class="btn-text btn-toggle-extra"
@@ -85,6 +85,22 @@
               type="button"
             >
               结构分析
+            </button>
+            <button
+              class="btn-text btn-copy"
+              onclick="copyCard({{ card.id }})"
+              title="复制此卡片"
+              type="button"
+            >
+              复制
+            </button>
+            <button
+              class="btn-text btn-cut"
+              onclick="cutCard({{ card.id }})"
+              title="剪切此卡片"
+              type="button"
+            >
+              剪切
             </button>
             <button
               class="btn-icon btn-delete"
@@ -177,6 +193,7 @@
             class="analysis-card"
             data-card-id="{{ card.id }}"
             data-analysis-card-id="{{ card.analysis_card.id }}"
+            style="display: {% if card.analysis_card_visible %}block{% else %}none{% endif %};"
           >
             <div class="analysis-card-header">
               <a
@@ -188,8 +205,8 @@
               </a>
               <button
                 class="btn-icon btn-delete"
-                onclick="deleteAnalysisCard({{ card.id }})"
-                title="删除分析卡片"
+                onclick="closeAnalysis({{ card.id }})"
+                title="关闭分析卡片"
               >
                 ×
               </button>
@@ -221,7 +238,18 @@
                     </div>
                     {% if v.phonetic %}
                     <p class="vocab-phonetic">/{{ v.phonetic }}/</p>
-                    {% endif %} {% if v.translation %}
+                    {% endif %} {% if v.pos %}
+                    <p class="vocab-pos">{{ v.pos }}</p>
+                    {% endif %}
+                    <div class="vocab-tense-row">
+                      {% if v.past_tense %}<span class="vocab-past-tense"
+                        >过去式：{{ v.past_tense }}</span
+                      >{% endif %} {% if v.past_participle %}<span
+                        class="vocab-past-participle"
+                        >过去分词：{{ v.past_participle }}</span
+                      >{% endif %}
+                    </div>
+                    {% if v.translation %}
                     <p class="vocab-translation">{{ v.translation }}</p>
                     {% endif %} {% if v.notes %}
                     <p class="vocab-notes">{{ v.notes }}</p>
@@ -262,7 +290,18 @@
                     </div>
                     {% if v.phonetic %}
                     <p class="vocab-phonetic">/{{ v.phonetic }}/</p>
-                    {% endif %} {% if v.translation %}
+                    {% endif %} {% if v.pos %}
+                    <p class="vocab-pos">{{ v.pos }}</p>
+                    {% endif %}
+                    <div class="vocab-tense-row">
+                      {% if v.past_tense %}<span class="vocab-past-tense"
+                        >过去式：{{ v.past_tense }}</span
+                      >{% endif %} {% if v.past_participle %}<span
+                        class="vocab-past-participle"
+                        >过去分词：{{ v.past_participle }}</span
+                      >{% endif %}
+                    </div>
+                    {% if v.translation %}
                     <p class="vocab-translation">{{ v.translation }}</p>
                     {% endif %} {% if v.notes %}
                     <p class="vocab-notes">{{ v.notes }}</p>
@@ -313,8 +352,11 @@
           </div>
           {% endif %}
 
-          <!-- 结构卡片（默认隐藏，点击"结构分析"按钮展开） -->
-          <div class="structure-card" style="display: none;">
+          <!-- 结构卡片（根据可见性状态显示） -->
+          <div
+            class="structure-card"
+            style="display: {% if card.structure_card_visible %}block{% else %}none{% endif %};"
+          >
             <div class="structure-card-header">
               <a
                 href="#card-row-{{ card.id }}"
@@ -347,7 +389,9 @@
                 class="card-translation-input"
                 data-card-id="{{ card.id }}"
                 placeholder="点击翻译按钮自动填充，或手动输入..."
-              >{{ card.translation if card.translation else '' }}</textarea>
+              >
+{{ card.translation if card.translation else '' }}</textarea
+              >
               <div
                 class="card-translation-display"
                 data-card-id="{{ card.id }}"
@@ -361,7 +405,9 @@
                 class="card-analysis-input"
                 data-card-id="{{ card.id }}"
                 placeholder="写下你的分析..."
-              >{{ card.analysis if card.analysis else '' }}</textarea>
+              >
+{{ card.analysis if card.analysis else '' }}</textarea
+              >
               <div
                 class="card-analysis-display"
                 data-card-id="{{ card.id }}"
@@ -388,9 +434,16 @@
     </div>
     <div class="cards-list-footer">
       <button class="btn-secondary" onclick="addCard()">+ 新建卡片</button>
+      <button
+        class="btn-secondary btn-paste"
+        onclick="pasteCard()"
+        style="display: none"
+      >
+        粘贴卡片
+      </button>
     </div>
   </div>
 </div>
 {% endblock %} {% block extra_script %}
-<script src="/static/js/detail.js?v=40"></script>
+<script src="/static/js/detail.js?v=62"></script>
 {% endblock %}

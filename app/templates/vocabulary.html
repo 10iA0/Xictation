@@ -21,10 +21,19 @@ block content %}
       "
     />
     <div class="sort-toggle">
-      <a href="/vocabulary?q={{ q }}&sort=time" class="sort-btn {% if sort == 'time' %}active{% endif %}">按时间</a>
-      <a href="/vocabulary?q={{ q }}&sort=alpha" class="sort-btn {% if sort == 'alpha' %}active{% endif %}">A-Z</a>
+      <a
+        href="/vocabulary?q={{ q }}&sort=time"
+        class="sort-btn {% if sort == 'time' %}active{% endif %}"
+        >按时间</a
+      >
+      <a
+        href="/vocabulary?q={{ q }}&sort=alpha"
+        class="sort-btn {% if sort == 'alpha' %}active{% endif %}"
+        >A-Z</a
+      >
     </div>
-    {% if q %}<a href="/vocabulary?sort={{ sort }}" class="btn-text">清除</a>{% endif %}
+    {% if q %}<a href="/vocabulary?sort={{ sort }}" class="btn-text">清除</a>{%
+    endif %}
   </div>
   <div class="vocab-grid">
     {% if words %} {% for w in words %}
@@ -50,30 +59,45 @@ block content %}
       </div>
       {% if w.phonetic %}
       <p class="vocab-phonetic">/{{ w.phonetic }}/</p>
-      {% endif %} {% if w.translation %}
+      {% endif %} {% if w.pos %}
+      <p class="vocab-pos">{{ w.pos }}</p>
+      {% endif %}
+      <div class="vocab-tense-row">
+        {% if w.past_tense %}<span class="vocab-past-tense"
+          >过去式：{{ w.past_tense }}</span
+        >{% endif %} {% if w.past_participle %}<span
+          class="vocab-past-participle"
+          >过去分词：{{ w.past_participle }}</span
+        >{% endif %}
+      </div>
+      {% if w.translation %}
       <p class="vocab-translation">{{ w.translation }}</p>
       {% endif %} {% if w.notes %}
       <p class="vocab-notes">{{ w.notes }}</p>
       {% endif %}
       <div class="vocab-meta">
-        {% set read_sources = (w.sources or {}).get('cannot_read', []) if w.sources and w.sources is mapping else [] %}
-        {% set understand_sources = (w.sources or {}).get('cannot_understand', []) if w.sources and w.sources is mapping else [] %}
-        {% if read_sources %}
+        {% set read_sources = (w.sources or {}).get('cannot_read', []) if
+        w.sources and w.sources is mapping else [] %} {% set understand_sources
+        = (w.sources or {}).get('cannot_understand', []) if w.sources and
+        w.sources is mapping else [] %} {% if read_sources %}
         <div class="vocab-sources">
           <span class="vocab-source-label source-label-read">读不懂</span>
           <div class="vocab-source-list">
             {% for s in read_sources %}
-            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag">{{ s.dictation_title }}</a>
+            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag"
+              >{{ s.dictation_title }}</a
+            >
             {% endfor %}
           </div>
         </div>
-        {% endif %}
-        {% if understand_sources %}
+        {% endif %} {% if understand_sources %}
         <div class="vocab-sources">
           <span class="vocab-source-label source-label-understand">听不懂</span>
           <div class="vocab-source-list">
             {% for s in understand_sources %}
-            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag">{{ s.dictation_title }}</a>
+            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag"
+              >{{ s.dictation_title }}</a
+            >
             {% endfor %}
           </div>
         </div>
