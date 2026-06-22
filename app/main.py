@@ -2,13 +2,13 @@
 import os
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 from app.database import Base, engine, SessionLocal
 from app.routers import dictations, vocabulary, api, auth
 from app.auth import get_current_user_id
+from app.templating import templates
 
 
 @asynccontextmanager
@@ -133,9 +133,8 @@ if os.getenv("ENVIRONMENT") != "production":
         return response
 
 
-# 静态文件与模板
+# 静态文件
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
 
 # 注册路由
 app.include_router(auth.router)

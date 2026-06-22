@@ -1,12 +1,11 @@
 """认证与用户管理路由"""
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from app.database import get_db
+from app.templating import templates
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-
-from app.database import get_db
 from app import models
 from app.auth import (
     set_session, clear_session, get_current_user_id, SESSION_COOKIE_NAME,
@@ -15,7 +14,6 @@ from app.auth import (
 from app.deepseek import DeepSeekError
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 # -------------------- 依赖：获取当前用户 --------------------
