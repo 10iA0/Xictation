@@ -868,6 +868,54 @@ def _get_user_vocab(db: Session, user: models.User, word_id: int) -> models.Voca
 def update_vocabulary(word_id: int, payload: VocabularyUpdate, request: Request, db: Session = Depends(get_db)):
     user = _current_user(request, db)
     word = _get_user_vocab(db, user, word_id)
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    # 如果修改了单词名，且新名称与当前用户已有生词重复，则合并到已有生词后删除当前记录
+    if payload.word is not None and payload.word != word.word:
+        existing = db.query(models.Vocabulary).filter(
+            models.Vocabulary.user_id == user.id,
+            models.Vocabulary.word == payload.word,
+        ).first()
+        if existing:
+            # 合并 sources
+            src = word.sources or {}
+            existing_src = existing.sources or {}
+            if not isinstance(existing_src, dict):
+                existing_src = {"cannot_read": [], "cannot_understand": []}
+            for cat in ["cannot_read", "cannot_understand"]:
+                existing_list = existing_src.get(cat, [])
+                for s in src.get(cat, []):
+                    if not any(e.get("card_id") == s.get("card_id") for e in existing_list):
+                        existing_list.append(s)
+                existing_src[cat] = existing_list
+            existing.sources = existing_src
+            flag_modified(existing, "sources")
+
+            # 合并 labels
+            labels = list(set((existing.labels or []) + (word.labels or [])))
+            existing.labels = labels
+            flag_modified(existing, "labels")
+
+            # 合并其他字段（优先保留已有值，仅补空）
+            if not existing.phonetic and word.phonetic:
+                existing.phonetic = word.phonetic
+            if not existing.pos and word.pos:
+                existing.pos = word.pos
+            if not existing.past_tense and word.past_tense:
+                existing.past_tense = word.past_tense
+            if not existing.past_participle and word.past_participle:
+                existing.past_participle = word.past_participle
+            if not existing.translation and word.translation:
+                existing.translation = word.translation
+            if not existing.notes and word.notes:
+                existing.notes = word.notes
+
+            # 删除旧记录
+            db.delete(word)
+            db.commit()
+            return {"ok": True, "merged": True, "target_id": existing.id}
+
     if payload.word is not None:
         word.word = payload.word
     if payload.phonetic is not None:
