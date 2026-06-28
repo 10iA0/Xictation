@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 from app.database import Base, engine, SessionLocal
-from app.routers import dictations, vocabulary, api, auth
+from app.routers import dictations, vocabulary, api, auth, practice
 from app.auth import get_current_user_id
 from app.templating import templates
 
@@ -100,6 +100,23 @@ async def lifespan(app: FastAPI):
             except Exception:
                 pass
 
+    # 迁移：vocabulary 表添加复习相关字段
+    if "vocabulary" in inspector.get_table_names():
+        existing_columns = [c["name"] for c in inspector.get_columns("vocabulary")]
+        with engine.connect() as conn:
+            if "next_review_at" not in existing_columns:
+                conn.execute(text("ALTER TABLE vocabulary ADD COLUMN next_review_at TIMESTAMP"))
+                conn.commit()
+            if "review_count" not in existing_columns:
+                conn.execute(text("ALTER TABLE vocabulary ADD COLUMN review_count INTEGER DEFAULT 0"))
+                conn.commit()
+            if "mastery_level" not in existing_columns:
+                conn.execute(text("ALTER TABLE vocabulary ADD COLUMN mastery_level INTEGER DEFAULT 0"))
+                conn.commit()
+            # 已有生词设置首次复习时间（1天后）
+            conn.execute(text("UPDATE vocabulary SET next_review_at = NOW() + INTERVAL '1 day' WHERE next_review_at IS NULL"))
+            conn.commit()
+
     # 初始化默认管理员账号（如果 users 表为空）
     from app import models
     db = SessionLocal()
@@ -141,6 +158,7 @@ app.include_router(auth.router)
 app.include_router(dictations.router)
 app.include_router(vocabulary.router)
 app.include_router(api.router)
+app.include_router(practice.router)
 
 
 @app.middleware("http")

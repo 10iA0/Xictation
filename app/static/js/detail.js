@@ -665,6 +665,13 @@ function initStructureEditMode(cardRow) {
     saveBtn.textContent = "保存";
     saveBtn.onclick = () => saveStructure(cardRow.dataset.cardId);
   }
+  // 保存原始值用于取消
+  if (translationInput)
+    translationInput.dataset.originalValue = translationInput.value;
+  if (analysisInput) analysisInput.dataset.originalValue = analysisInput.value;
+  // 显示取消按钮
+  const cancelBtn = cardRow.querySelector(".btn-cancel-structure");
+  if (cancelBtn) cancelBtn.style.display = "";
 }
 
 function initStructureDisplayMode(cardRow) {
@@ -690,6 +697,9 @@ function initStructureDisplayMode(cardRow) {
     saveBtn.textContent = "编辑";
     saveBtn.onclick = () => editStructure(cardRow.dataset.cardId);
   }
+  // 隐藏取消按钮
+  const cancelBtn = cardRow.querySelector(".btn-cancel-structure");
+  if (cancelBtn) cancelBtn.style.display = "none";
 }
 
 async function saveStructure(cardId) {
@@ -717,6 +727,29 @@ function editStructure(cardId) {
   const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
   if (!cardRow) return;
   initStructureEditMode(cardRow);
+}
+
+async function cancelStructure(cardId) {
+  const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
+  if (!cardRow) return;
+  const translationInput = cardRow.querySelector(".card-translation-input");
+  const analysisInput = cardRow.querySelector(".card-analysis-input");
+  const translation = translationInput
+    ? translationInput.dataset.originalValue || ""
+    : "";
+  const analysis = analysisInput
+    ? analysisInput.dataset.originalValue || ""
+    : "";
+  // 恢复 textarea 值
+  if (translationInput) translationInput.value = translation;
+  if (analysisInput) analysisInput.value = analysis;
+  // autoSave 可能已修改服务器，用原始值覆盖
+  await fetch(`/api/cards/${cardId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ translation, analysis }),
+  });
+  initStructureDisplayMode(cardRow);
 }
 
 // ========== 卡片保存（听写+正确内容统一保存，单词粒度对比） ==========
@@ -773,6 +806,54 @@ async function saveCard(cardId) {
   const saveBtn = cardRow.querySelector(".btn-save-card");
   saveBtn.textContent = "编辑";
   saveBtn.onclick = () => editCard(cardId);
+
+  // 隐藏取消按钮
+  const cancelBtn = cardRow.querySelector(".btn-cancel-card");
+  if (cancelBtn) cancelBtn.style.display = "none";
+
+  // 保存成功后检查是否需要复习
+  if (typeof checkReviewAfterSave === "function") checkReviewAfterSave();
+}
+
+function cancelCard(cardId) {
+  const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
+  if (!cardRow) return;
+  const contentInput = cardRow.querySelector(".card-content-input");
+  const correctInput = cardRow.querySelector(".correct-content-input");
+  // 恢复原始值
+  if (contentInput.dataset.originalValue !== undefined) {
+    contentInput.value = contentInput.dataset.originalValue;
+  }
+  if (correctInput.dataset.originalValue !== undefined) {
+    correctInput.value = correctInput.dataset.originalValue;
+  }
+  // 切换到展示模式（不保存到服务器）
+  const originalDisplay = cardRow.querySelector(".card-content-display");
+  const correctDisplay = cardRow.querySelector(".correct-content-display");
+  const content = contentInput.value;
+  const correctContent = correctInput.value;
+  const diffResult = diffWords(content, correctContent);
+  originalDisplay.innerHTML = diffResult.original;
+  correctDisplay.innerHTML = diffResult.correct;
+  correctDisplay.classList.remove("annotation-preview-live");
+  const blocks = cardRow.querySelectorAll(".content-block");
+  blocks.forEach((block) => {
+    const cid = block.dataset.cardId;
+    if (cid && block.querySelector(".correct-content-display")) {
+      renderAnnotations(cid, block);
+    }
+  });
+  contentInput.style.display = "none";
+  correctInput.style.display = "none";
+  originalDisplay.style.display = "block";
+  correctDisplay.style.display = "block";
+  const toolbar = cardRow.querySelector(".correct-toolbar");
+  if (toolbar) toolbar.style.display = "none";
+  const saveBtn = cardRow.querySelector(".btn-save-card");
+  saveBtn.textContent = "编辑";
+  saveBtn.onclick = () => editCard(cardId);
+  const cancelBtn = cardRow.querySelector(".btn-cancel-card");
+  if (cancelBtn) cancelBtn.style.display = "none";
 }
 
 function editCard(cardId) {
@@ -781,6 +862,10 @@ function editCard(cardId) {
   const correctInput = cardRow.querySelector(".correct-content-input");
   const originalDisplay = cardRow.querySelector(".card-content-display");
   const correctDisplay = cardRow.querySelector(".correct-content-display");
+
+  // 保存原始值用于取消
+  contentInput.dataset.originalValue = contentInput.value;
+  correctInput.dataset.originalValue = correctInput.value;
 
   // 切回编辑模式
   contentInput.style.display = "block";
@@ -798,6 +883,44 @@ function editCard(cardId) {
   const editBtn = cardRow.querySelector(".btn-save-card");
   editBtn.textContent = "保存";
   editBtn.onclick = () => saveCard(cardId);
+
+  // 显示取消按钮
+  const cancelBtn = cardRow.querySelector(".btn-cancel-card");
+  if (cancelBtn) cancelBtn.style.display = "";
+}
+
+// ========== AI 分析连读/弱读（调用 DeepSeek） ==========
+async function analyzePhonetics(btn, cardId) {
+  const cardRow = document.querySelector(`.card-row[data-card-id="${cardId}"]`);
+  if (!cardRow) return;
+  const block = btn.closest(".content-block");
+  const originalText = btn.textContent;
+  btn.textContent = "分析中...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/cards/${cardId}/analyze-phonetics`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      handleDeepSeekError(res, err);
+      return;
+    }
+    const data = await res.json();
+    if (data.saved > 0) {
+      showToast(`已标记 ${data.saved} 处（跳过 ${data.skipped} 处）`);
+      // 刷新预览
+      showAnnotationPreview(cardId, block);
+    } else {
+      showToast("未发现需要标注的连读/弱读");
+    }
+  } catch (e) {
+    showToast("分析失败");
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 // ========== 翻译正确内容（调用 DeepSeek） ==========
@@ -1252,7 +1375,9 @@ function renderAnnotations(cardId, block) {
         // 再应用语音标注：每个标注只显示一次标签（首次出现的段）
         if (phoneticAnns.length > 0) {
           const labelParts = [];
-          let borderColor = "";
+          let primaryColor = "";
+          let customRendered = false; // 是否已经自定义渲染（连读/弱读）
+
           for (const ann of phoneticAnns) {
             // 只在该标注首次出现的段显示标签
             const showLabel = !labeledAnnIds.has(ann.id);
@@ -1261,31 +1386,49 @@ function renderAnnotations(cardId, block) {
               isEditing && showLabel
                 ? `<span class="ann-remove" onclick="event.stopPropagation(); removeAnnotation(${ann.id},${cardId},this)" title="删除">×</span>`
                 : "";
+
             if (ann.annotation_type === "liaison") {
-              if (showLabel)
-                labelParts.push(
-                  `<span style="color:${LIAISON_COLOR};">连${removeBtn}</span>`,
-                );
-              borderColor = borderColor || LIAISON_COLOR;
+              primaryColor = primaryColor || LIAISON_COLOR;
+              // 连读：如果选中文本是 "word1 (空格) word2" 模式，把空格替换为 //
+              if (showLabel && !customRendered) {
+                const originalText = seg.text;
+                const m = originalText.match(/^(\S+?)\s+(\S+)$/);
+                if (m) {
+                  const newText = m[1] + "//" + m[2];
+                  const escapedNew = escapeHtml(newText);
+                  wrapped = `<span class="annotation-mark"><span class="annotation-text liaison-text" style="color:${LIAISON_COLOR};font-weight:600;">${escapedNew}</span>${removeBtn ? '<span class="annotation-label">' + removeBtn + "</span>" : ""}</span>`;
+                  customRendered = true;
+                  continue;
+                }
+              }
+              if (showLabel) labelParts.push(removeBtn);
             } else if (ann.annotation_type === "weak") {
-              if (showLabel)
-                labelParts.push(
-                  `<span style="color:${WEAK_COLOR};">弱${removeBtn}</span>`,
-                );
-              borderColor = borderColor || WEAK_COLOR;
+              primaryColor = primaryColor || WEAK_COLOR;
+              if (showLabel && !customRendered) {
+                // 弱读：在单词上画一条横线（删除线样式）
+                const text = escapeHtml(seg.text);
+                wrapped = `<span class="annotation-mark weak-strike"><span class="annotation-text" style="color:${WEAK_COLOR};text-decoration:line-through;text-decoration-thickness:2px;">${text}</span>${removeBtn ? '<span class="annotation-label">' + removeBtn + "</span>" : ""}</span>`;
+                customRendered = true;
+                continue;
+              }
+              if (showLabel) labelParts.push(removeBtn);
             } else if (ann.annotation_type === "burst") {
+              primaryColor = primaryColor || BURST_COLOR;
               if (showLabel)
                 labelParts.push(
                   `<span style="color:${BURST_COLOR};">爆${removeBtn}</span>`,
                 );
-              borderColor = borderColor || BURST_COLOR;
             }
           }
-          const labelHtml =
-            labelParts.length > 0
-              ? `<span class="annotation-label">${labelParts.join(" ")}</span>`
-              : "";
-          wrapped = `<span class="annotation-mark"><span class="annotation-text" style="border-bottom:2px solid ${borderColor};">${wrapped}</span>${labelHtml}</span>`;
+
+          // 如果没有自定义渲染（连读/弱读），使用默认下划线
+          if (!customRendered) {
+            const labelHtml =
+              labelParts.length > 0
+                ? `<span class="annotation-label">${labelParts.join(" ")}</span>`
+                : "";
+            wrapped = `<span class="annotation-mark"><span class="annotation-text" style="border-bottom:2px solid ${primaryColor};">${wrapped}</span>${labelHtml}</span>`;
+          }
         }
 
         htmlParts.push(wrapped);
@@ -1369,7 +1512,7 @@ function insertAnalysisCard(cardRow, cardId, analysisCardId) {
       </div>
       <div class="analysis-sections">
         <div class="analysis-section">
-          <h5>读不懂（生词）</h5>
+          <h5>读不懂</h5>
           <div class="vocab-list" data-card-id="${cardId}"></div>
           <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_read')">+ 添加</button>
         </div>
@@ -1379,7 +1522,7 @@ function insertAnalysisCard(cardRow, cardId, analysisCardId) {
           <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_understand')">+ 添加</button>
         </div>
         <div class="analysis-section">
-          <h5>听不到（连读/弱读/爆破）</h5>
+          <h5>听不到（连读/弱读）</h5>
           <div class="analysis-records" data-category="cannot_hear" data-card-id="${cardId}"></div>
           <button class="btn-secondary btn-small" onclick="addAnalysisRecord(${cardId}, 'cannot_hear')">+ 添加</button>
         </div>

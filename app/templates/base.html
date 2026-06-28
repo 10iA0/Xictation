@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>{% block title %}Xictation 精听工具{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=52" />
+    <link rel="stylesheet" href="/static/css/style.css?v=56" />
     {% block extra_head %}{% endblock %}
   </head>
   <body>
@@ -34,14 +34,21 @@
             class="nav-item {% if active_tab == 'dictations' %}active{% endif %}"
           >
             <span class="nav-icon">≡</span>
-            <span>听写本</span>
+            <span>听写</span>
           </a>
           <a
             href="/vocabulary"
             class="nav-item {% if active_tab == 'vocabulary' %}active{% endif %}"
           >
             <span class="nav-icon">★</span>
-            <span>生词本</span>
+            <span>生词</span>
+          </a>
+          <a
+            href="/practice"
+            class="nav-item {% if active_tab == 'practice' %}active{% endif %}"
+          >
+            <span class="nav-icon">✎</span>
+            <span>复习</span>
           </a>
         </nav>
         <!-- 底部用户头像 -->
@@ -101,7 +108,7 @@
     <main class="main-content">{% block content_no_auth %}{% endblock %}</main>
     {% endif %}
 
-    <script src="/static/js/main.js?v=20"></script>
+    <script src="/static/js/main.js?v=21"></script>
     {% block extra_script %}{% endblock %}
     <script>
       function toggleUserMenu() {
@@ -117,6 +124,57 @@
           overlay.classList.add("show");
         }
       }
+
+      // 强制复习检查（复习页面不弹窗，用户已在复习中）
+      {% if current_user %}
+      (function checkDueReview() {
+        if (window.location.pathname === '/practice') return;
+        fetch('/api/practice/due-count')
+          .then(r => r.json())
+          .then(data => {
+            if (data.due_count > 0) {
+              showReviewAlert(data.due_count);
+            }
+          });
+      })();
+
+      function showReviewAlert(count) {
+        const overlay = document.createElement('div');
+        overlay.className = 'review-force-overlay';
+        overlay.id = 'review-force-overlay';
+        overlay.innerHTML = `
+          <div class="review-force-modal">
+            <div style="font-size:48px;margin-bottom:12px;">📝</div>
+            <h3 style="font-size:20px;font-weight:700;margin-bottom:8px;">该复习了!</h3>
+            <p style="color:var(--color-text-secondary);margin-bottom:24px;">你有 ${count} 个生词需要复习，完成复习后才能继续操作</p>
+            <button class="btn-next" onclick="globalStartReview()" style="padding:12px 32px;border-radius:var(--radius-md);background:var(--color-primary);color:white;border:none;font-size:16px;font-weight:600;cursor:pointer;">开始复习</button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      }
+
+      // 全局启动复习：跳转到 /practice 页面，并标记自动开始
+      async function globalStartReview() {
+        const overlay = document.getElementById('review-force-overlay');
+        if (overlay) overlay.remove();
+        try {
+          sessionStorage.setItem('autoStartReview', '1');
+        } catch(e) {}
+        window.location.href = '/practice?auto=1';
+      }
+
+      // 全局：保存卡片后检查是否需要复习（复习页面不弹窗）
+      function checkReviewAfterSave() {
+        if (window.location.pathname === '/practice') return;
+        fetch('/api/practice/due-count')
+          .then(r => r.json())
+          .then(data => {
+            if (data.due_count > 0 && !document.getElementById('review-force-overlay')) {
+              showReviewAlert(data.due_count);
+            }
+          });
+      }
+      {% endif %}
     </script>
   </body>
 </html>

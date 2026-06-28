@@ -1,5 +1,21 @@
 {% extends "base.html" %} {% block title %}{% if dictation %}{{ dictation.title
-}}{% else %}新建听写{% endif %} - Xictation{% endblock %} {% block content %}
+}}{% else %}新建听写{% endif %} - Xictation{% endblock %} {% block extra_head %}
+<style>
+  /* 锚点跳转时高亮目标卡片 */
+  .card-highlight-flash {
+    animation: cardFlash 2.5s ease-out;
+    border-radius: 8px;
+  }
+  @keyframes cardFlash {
+    0% {
+      background-color: rgba(255, 235, 59, 0.6);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
 <div
   class="detail-container"
   data-dictation-id="{{ dictation.id if dictation else '' }}"
@@ -166,17 +182,24 @@
                 弱读
               </button>
               <button
-                class="btn-annotation"
-                data-type="burst"
-                onclick="applyAnnotation(this, 'burst')"
+                class="btn-annotation btn-ai-analyze"
+                onclick="analyzePhonetics(this, {{ card.id }})"
+                title="调用 AI 自动分析连读和弱读"
               >
-                爆破
+                AI分析
               </button>
             </div>
           </div>
 
           <!-- 卡片右下角统一保存按钮 -->
           <div class="card-footer">
+            <button
+              class="btn-secondary btn-cancel-card"
+              onclick="cancelCard({{ card.id }})"
+              style="display: none"
+            >
+              取消
+            </button>
             <button
               class="btn-primary btn-save-card"
               onclick="saveCard({{ card.id }})"
@@ -213,7 +236,7 @@
             </div>
             <div class="analysis-sections">
               <div class="analysis-section">
-                <h5>读不懂（生词）</h5>
+                <h5>读不懂</h5>
                 <div class="vocab-list" data-card-id="{{ card.id }}">
                   {% for v in card.vocab_read %}
                   <div class="vocab-item vocab-card" data-id="{{ v.id }}">
@@ -317,7 +340,7 @@
                 </button>
               </div>
               <div class="analysis-section">
-                <h5>听不到（连读/弱读/爆破）</h5>
+                <h5>听不到（连读/弱读）</h5>
                 <div
                   class="analysis-records"
                   data-category="cannot_hear"
@@ -417,6 +440,13 @@
             <!-- 结构卡片保存/编辑按钮 -->
             <div class="card-footer">
               <button
+                class="btn-secondary btn-cancel-structure"
+                onclick="cancelStructure({{ card.id }})"
+                style="display: none"
+              >
+                取消
+              </button>
+              <button
                 class="btn-primary btn-save-structure"
                 onclick="saveStructure({{ card.id }})"
               >
@@ -445,5 +475,40 @@
   </div>
 </div>
 {% endblock %} {% block extra_script %}
-<script src="/static/js/detail.js?v=62"></script>
+<script src="/static/js/detail.js?v=67"></script>
+<script>
+  // 处理 #card-row-{id} 锚点：滚动到目标卡片并高亮
+  (function () {
+    function scrollToCard() {
+      const hash = window.location.hash;
+      if (!hash || !hash.startsWith("#card-row-")) return;
+      const id = hash.substring("#card-row-".length);
+      const el = document.getElementById("card-row-" + id);
+      if (!el) return;
+      // 等所有内容渲染完（detail.js 异步构建 DOM）
+      let attempts = 0;
+      const tryScroll = function () {
+        const target = document.getElementById("card-row-" + id);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.add("card-highlight-flash");
+          setTimeout(function () {
+            target.classList.remove("card-highlight-flash");
+          }, 2500);
+        } else if (attempts < 20) {
+          attempts++;
+          setTimeout(tryScroll, 150);
+        }
+      };
+      tryScroll();
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", scrollToCard);
+    } else {
+      scrollToCard();
+    }
+    // 处理后退/前进导航到锚点
+    window.addEventListener("hashchange", scrollToCard);
+  })();
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""生词本相关路由"""
+"""生词相关路由"""
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session

@@ -1,4 +1,4 @@
-"""页面路由：听写列表、详情页、生词本"""
+"""页面路由：听写列表、详情页、生词"""
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -86,6 +86,39 @@ async def vocabulary_list(request: Request, q: Optional[str] = None, sort: str =
         words = query.order_by(models.Vocabulary.word.asc()).all()
     else:
         words = query.order_by(models.Vocabulary.created_at.desc()).all()
+
+    # 为每个 word 的 sources 计算 card_index（在 dictation 中的实际位置）
+    if words:
+        # 收集所有 dictation_id
+        dictation_ids = set()
+        for w in words:
+            src = w.sources if isinstance(w.sources, dict) else {}
+            for cat in ("cannot_read", "cannot_understand"):
+                for s in (src.get(cat) or []):
+                    if isinstance(s, dict) and s.get("dictation_id"):
+                        dictation_ids.add(s["dictation_id"])
+        # 一次性查出这些 dictation 的卡片（按 card_order 排序）
+        card_index_map = {}  # {dictation_id: {card_id: index}}
+        if dictation_ids:
+            cards = db.query(models.DictationCard).filter(
+                models.DictationCard.dictation_id.in_(dictation_ids)
+            ).order_by(
+                models.DictationCard.dictation_id.asc(),
+                models.DictationCard.card_order.asc(),
+                models.DictationCard.id.asc(),
+            ).all()
+            for c in cards:
+                m = card_index_map.setdefault(c.dictation_id, {})
+                m[c.id] = len(m) + 1
+        # 给每个 word 的 source 加上 card_index
+        for w in words:
+            src = w.sources if isinstance(w.sources, dict) else {}
+            for cat in ("cannot_read", "cannot_understand"):
+                lst = src.get(cat) or []
+                for s in lst:
+                    if isinstance(s, dict) and s.get("card_id") and s.get("dictation_id"):
+                        s["card_index"] = card_index_map.get(s["dictation_id"], {}).get(s["card_id"], 0)
+
     return templates.TemplateResponse("vocabulary.html", {
         "request": request, "words": words, "q": q or "", "sort": sort,
         "current_user": user, "active_tab": "vocabulary"

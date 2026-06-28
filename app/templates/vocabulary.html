@@ -1,8 +1,8 @@
-{% extends "base.html" %} {% block title %}生词本 - Xictation{% endblock %} {%
+{% extends "base.html" %} {% block title %}生词 - Xictation{% endblock %} {%
 block content %}
 <div class="list-container">
   <div class="list-header">
-    <h2>生词本</h2>
+    <h2>生词</h2>
     <button class="btn-primary btn-new-vocab" onclick="addNewVocab()">
       + 新建生词
     </button>
@@ -84,9 +84,14 @@ block content %}
           <span class="vocab-source-label source-label-read">读不懂</span>
           <div class="vocab-source-list">
             {% for s in read_sources %}
-            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag"
-              >{{ s.dictation_title }}</a
+            <a
+              href="/dictations/{{ s.dictation_id }}#card-row-{{ s.card_id }}"
+              class="vocab-source-tag"
+              title="{{ s.dictation_title }}{% if s.card_content %} - {{ s.card_content }}{% endif %}"
             >
+              <span class="vocab-source-title">{{ s.dictation_title }}</span>
+              <span class="vocab-source-card">卡片#{{ s.card_index or loop.index }}</span>
+            </a>
             {% endfor %}
           </div>
         </div>
@@ -95,9 +100,14 @@ block content %}
           <span class="vocab-source-label source-label-understand">听不懂</span>
           <div class="vocab-source-list">
             {% for s in understand_sources %}
-            <a href="/dictations/{{ s.dictation_id }}" class="vocab-source-tag"
-              >{{ s.dictation_title }}</a
+            <a
+              href="/dictations/{{ s.dictation_id }}#card-row-{{ s.card_id }}"
+              class="vocab-source-tag"
+              title="{{ s.dictation_title }}{% if s.card_content %} - {{ s.card_content }}{% endif %}"
             >
+              <span class="vocab-source-title">{{ s.dictation_title }}</span>
+              <span class="vocab-source-card">卡片#{{ s.card_index or loop.index }}</span>
+            </a>
             {% endfor %}
           </div>
         </div>
@@ -112,4 +122,27 @@ block content %}
     {% endif %}
   </div>
 </div>
+{% endblock %} {% block extra_head %}
+<style>
+  /* 卡片引用样式：单行，听写标题 + 卡片编号 */
+  .vocab-source-tag {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    max-width: 360px;
+    line-height: 1.4;
+  }
+  .vocab-source-title {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    opacity: 0.85;
+  }
+  .vocab-source-card {
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .vocab-source-tag:hover .vocab-source-card {
+    text-decoration: underline;
+  }
+</style>
 {% endblock %}

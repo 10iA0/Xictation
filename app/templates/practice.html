@@ -1,0 +1,1395 @@
+{% extends "base.html" %} {% block title %}复习 - Xictation{% endblock %} {%
+block extra_head %}
+<style>
+  .practice-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .practice-page h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+
+  /* 统计卡片 */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    text-align: center;
+  }
+  .stat-card .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+  .stat-card .stat-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+
+  /* 掌握度条 */
+  .mastery-section {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+  .mastery-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .mastery-bar {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    height: 32px;
+    margin-bottom: 12px;
+  }
+  .mastery-bar .bar-new {
+    background: #ff6b6b;
+  }
+  .mastery-bar .bar-learning {
+    background: #ffd43b;
+  }
+  .mastery-bar .bar-mastered {
+    background: #51cf66;
+  }
+  .mastery-legend {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .mastery-legend span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mastery-legend .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* 贡献图 - GitHub 风格 */
+  .contribution-section {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+  .contribution-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .contribution-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .year-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .year-tab {
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+  }
+  .year-tab:hover {
+    border-color: var(--color-primary);
+  }
+  .year-tab.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+  .contribution-wrapper {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .contribution-months-row {
+    position: relative;
+    margin-left: 36px;
+    margin-bottom: 4px;
+    height: 18px;
+  }
+  .contribution-month-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+  .contribution-grid-container {
+    display: flex;
+    gap: 0;
+  }
+  .contribution-week-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-right: 6px;
+    width: 30px;
+    flex-shrink: 0;
+  }
+  .contribution-week-label {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    height: 13px;
+    line-height: 13px;
+    text-align: right;
+  }
+  .contribution-grid {
+    display: grid;
+    grid-template-rows: repeat(7, 13px);
+    grid-auto-flow: column;
+    grid-auto-columns: 13px;
+    gap: 3px;
+  }
+  .contribution-cell {
+    width: 13px;
+    height: 13px;
+    border-radius: 2px;
+    background: #ebedf0;
+    cursor: pointer;
+    position: relative;
+  }
+  .contribution-cell.level-1 {
+    background: #9be9a8;
+  }
+  .contribution-cell.level-2 {
+    background: #40c463;
+  }
+  .contribution-cell.level-3 {
+    background: #30a14e;
+  }
+  .contribution-cell.level-4 {
+    background: #216e39;
+  }
+  /* 全局 tooltip */
+  .contribution-tooltip {
+    position: fixed;
+    background: #333;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 10000;
+    pointer-events: none;
+    display: none;
+  }
+  .contribution-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: #333;
+  }
+  .contribution-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    justify-content: flex-end;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .contribution-legend .contribution-cell {
+    position: static;
+  }
+
+  /* 待复习列表 */
+  .due-section {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+  .due-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .due-list {
+    list-style: none;
+    padding: 0;
+  }
+  .due-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .due-list li:last-child {
+    border-bottom: none;
+  }
+  .due-word {
+    font-weight: 600;
+  }
+  .due-translation {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+  }
+  .due-time {
+    color: var(--color-danger);
+    font-size: 12px;
+  }
+
+  /* 开始复习按钮 */
+  .practice-actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: center;
+  }
+  .btn-practice {
+    padding: 14px 32px;
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: var(--color-primary);
+    color: white;
+  }
+  .btn-practice:hover {
+    background: var(--color-primary-hover);
+  }
+
+  /* 复习模态框 */
+  .practice-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .practice-modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    max-width: 560px;
+    width: 90%;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+  }
+  .practice-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    font-size: 20px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .practice-modal-close:hover {
+    background: var(--color-border);
+  }
+  .practice-modal h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .practice-progress {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 24px;
+  }
+  .practice-progress-bar {
+    height: 4px;
+    background: #ebedf0;
+    border-radius: 2px;
+    margin-bottom: 24px;
+  }
+  .practice-progress-bar .fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  /* 拼写题 */
+  .spelling-question {
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+  .spelling-hint {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+  }
+  .spelling-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 20px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    outline: none;
+    text-align: center;
+    letter-spacing: 2px;
+  }
+  .spelling-input:focus {
+    border-color: var(--color-primary);
+  }
+  .spelling-input.correct {
+    border-color: #51cf66;
+    background: #f0fff4;
+  }
+  .spelling-input.wrong {
+    border-color: #ff6b6b;
+    background: #fff5f5;
+  }
+  .spelling-answer {
+    font-size: 14px;
+    margin-top: 12px;
+    min-height: 20px;
+  }
+  .spelling-answer.correct {
+    color: #2b8a3e;
+  }
+  .spelling-answer.wrong {
+    color: #e03131;
+  }
+
+  /* 选择题 */
+  .choice-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .choice-option {
+    padding: 14px 20px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 15px;
+    text-align: left;
+    transition: all 0.2s;
+    background: var(--color-surface);
+  }
+  .choice-option:hover {
+    border-color: var(--color-primary);
+  }
+  .choice-option.correct {
+    border-color: #51cf66;
+    background: #f0fff4;
+  }
+  .choice-option.wrong {
+    border-color: #ff6b6b;
+    background: #fff5f5;
+  }
+  .choice-option.disabled {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .practice-btn-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+    gap: 12px;
+  }
+  .btn-next {
+    padding: 10px 24px;
+    border-radius: var(--radius-md);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-next:hover {
+    background: var(--color-primary-hover);
+  }
+  .btn-master {
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    background: #51cf66;
+    color: white;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-master:hover {
+    background: #40c057;
+  }
+
+  /* 复习提醒条 */
+  .review-alert {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .review-alert-text {
+    font-size: 15px;
+    color: #856404;
+  }
+  .review-alert-btn {
+    padding: 8px 20px;
+    border-radius: var(--radius-md);
+    background: #ffc107;
+    color: #333;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .review-alert-btn:hover {
+    background: #e0a800;
+  }
+
+  /* 完成画面 */
+  .practice-complete {
+    text-align: center;
+    padding: 40px 0;
+  }
+  .practice-complete .emoji {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+  .practice-complete h3 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .practice-complete p {
+    color: var(--color-text-secondary);
+    font-size: 15px;
+  }
+
+  /* 生词复习列表 */
+  .vocab-list-section {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+  .vocab-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .vocab-list-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .vocab-filter-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .vocab-filter-tab {
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+  }
+  .vocab-filter-tab:hover {
+    border-color: var(--color-primary);
+  }
+  .vocab-filter-tab.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+  .vocab-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .vocab-table th {
+    text-align: left;
+    padding: 10px 8px;
+    border-bottom: 2px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .vocab-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+  .vocab-table tr.due {
+    background: #fff5f5;
+  }
+  .vocab-table tr.due td {
+    color: #c92a2a;
+  }
+  .vocab-table tr.due .vocab-word {
+    color: #c92a2a;
+    font-weight: 700;
+  }
+  .vocab-table tr.mastered {
+    opacity: 0.7;
+  }
+  .vocab-table tr.mastered .vocab-word {
+    text-decoration: line-through;
+  }
+  .vocab-word {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .vocab-phonetic {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    margin-left: 6px;
+  }
+  .vocab-translation {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+  }
+  .vocab-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .vocab-status-new {
+    background: #fff3cd;
+    color: #856404;
+  }
+  .vocab-status-due {
+    background: #ffe3e3;
+    color: #c92a2a;
+  }
+  .vocab-status-upcoming {
+    background: #d0ebff;
+    color: #1864ab;
+  }
+  .vocab-status-mastered {
+    background: #d3f9d8;
+    color: #2b8a3e;
+  }
+  .vocab-overdue {
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .vocab-overdue.due {
+    color: #c92a2a;
+  }
+  .vocab-overdue.upcoming {
+    color: var(--color-text-secondary);
+  }
+  .vocab-review-count {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+  }
+  /* 分页 */
+  .vocab-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    margin-top: 16px;
+  }
+  .vocab-page-btn {
+    min-width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 8px;
+  }
+  .vocab-page-btn:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  .vocab-page-btn.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+  .vocab-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .vocab-page-info {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin: 0 8px;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="practice-page">
+  <h2>复习</h2>
+
+  {% if due_count > 0 %}
+  <div class="review-alert">
+    <span class="review-alert-text">你有 {{ due_count }} 个生词需要复习</span>
+    <button class="review-alert-btn" onclick="startReview()">立即复习</button>
+  </div>
+  {% endif %}
+
+  <!-- 统计卡片 -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">{{ streak }}</div>
+      <div class="stat-label">连续学习天数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ today_reviews }}</div>
+      <div class="stat-label">今日复习</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">
+        {{ today_correct }}{% if today_reviews > 0 %} ({{ (today_correct /
+        today_reviews * 100) | int }}%){% endif %}
+      </div>
+      <div class="stat-label">今日正确</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ week_reviews }}</div>
+      <div class="stat-label">本周复习</div>
+    </div>
+  </div>
+
+  <!-- 掌握度 -->
+  <div class="mastery-section">
+    <h3>生词掌握度</h3>
+    {% set total = mastery_new + mastery_learning + mastery_mastered %} {% if
+    total > 0 %}
+    <div class="mastery-bar">
+      <div
+        class="bar-new"
+        style="width: {{ (mastery_new / total * 100) | int }}%"
+      ></div>
+      <div
+        class="bar-learning"
+        style="width: {{ (mastery_learning / total * 100) | int }}%"
+      ></div>
+      <div
+        class="bar-mastered"
+        style="width: {{ (mastery_mastered / total * 100) | int }}%"
+      ></div>
+    </div>
+    {% else %}
+    <div class="mastery-bar">
+      <div class="bar-new" style="width: 100%"></div>
+    </div>
+    {% endif %}
+    <div class="mastery-legend">
+      <span
+        ><span class="dot" style="background: #ff6b6b"></span> 新词 {{
+        mastery_new }}</span
+      >
+      <span
+        ><span class="dot" style="background: #ffd43b"></span> 学习中 {{
+        mastery_learning }}</span
+      >
+      <span
+        ><span class="dot" style="background: #51cf66"></span> 已掌握 {{
+        mastery_mastered }}</span
+      >
+    </div>
+  </div>
+
+  <!-- 贡献图 - GitHub 风格 -->
+  <div class="contribution-section">
+    <div class="contribution-header">
+      <h3>复习记录</h3>
+      <div class="year-tabs" id="year-tabs">
+        {% for y in years %}
+        <button
+          class="year-tab {% if y == current_year %}active{% endif %}"
+          onclick="switchYear({{ y }})"
+        >
+          {{ y }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="contribution-wrapper">
+      <div class="contribution-months-row" id="contribution-months"></div>
+      <div class="contribution-grid-container">
+        <div class="contribution-week-labels">
+          <div class="contribution-week-label">周一</div>
+          <div class="contribution-week-label">周二</div>
+          <div class="contribution-week-label">周三</div>
+          <div class="contribution-week-label">周四</div>
+          <div class="contribution-week-label">周五</div>
+          <div class="contribution-week-label">周六</div>
+          <div class="contribution-week-label">周日</div>
+        </div>
+        <div class="contribution-grid" id="contribution-grid"></div>
+      </div>
+    </div>
+    <div class="contribution-legend">
+      少
+      <div class="contribution-cell"></div>
+      <div class="contribution-cell level-1"></div>
+      <div class="contribution-cell level-2"></div>
+      <div class="contribution-cell level-3"></div>
+      <div class="contribution-cell level-4"></div>
+      多
+    </div>
+  </div>
+
+  <!-- 待复习列表 -->
+  {% if due_reviews %}
+  <div class="due-section">
+    <h3>待复习生词（{{ due_count }}）</h3>
+    <ul class="due-list">
+      {% for v in due_reviews %}
+      <li>
+        <div>
+          <span class="due-word">{{ v.word }}</span>
+          <span class="due-translation"> - {{ v.translation }}</span>
+        </div>
+        <span class="due-time"
+          >到期于 {{ v.next_review_at.strftime('%m-%d %H:%M') }}</span
+        >
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <!-- 全部生词复习列表 -->
+  <div class="vocab-list-section">
+    <div class="vocab-list-header">
+      <h3>生词复习列表</h3>
+      <div class="vocab-filter-tabs">
+        <button type="button" class="vocab-filter-tab active" data-filter="all">
+          全部
+        </button>
+        <button type="button" class="vocab-filter-tab" data-filter="due">
+          已过期
+        </button>
+        <button type="button" class="vocab-filter-tab" data-filter="new">
+          新词
+        </button>
+        <button type="button" class="vocab-filter-tab" data-filter="upcoming">
+          未到期
+        </button>
+        <button type="button" class="vocab-filter-tab" data-filter="mastered">
+          已掌握
+        </button>
+      </div>
+    </div>
+    <table class="vocab-table">
+      <thead>
+        <tr>
+          <th>单词</th>
+          <th>翻译</th>
+          <th>状态</th>
+          <th>下次复习</th>
+          <th>已复习</th>
+        </tr>
+      </thead>
+      <tbody id="vocab-table-body">
+        <tr>
+          <td
+            colspan="5"
+            style="
+              text-align: center;
+              color: var(--color-text-secondary);
+              padding: 24px;
+            "
+          >
+            加载中...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="vocab-pagination" id="vocab-pagination"></div>
+  </div>
+
+  <!-- 开始复习按钮 -->
+  <div class="practice-actions">
+    <button class="btn-practice" onclick="startReview()">开始复习</button>
+  </div>
+</div>
+
+<!-- 复习模态框 -->
+<div class="practice-modal-overlay" id="practice-overlay" style="display: none">
+  <div class="practice-modal" id="practice-modal"></div>
+</div>
+
+<!-- 贡献图全局 tooltip -->
+<div class="contribution-tooltip" id="contribution-tooltip"></div>
+
+<script>
+  const yearlyData = {{ yearly_data | tojson }};
+  const allYears = {{ years | tojson }};
+  let currentViewYear = {{ current_year }};
+
+  const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const weekDayNames = ['周日','周一','周二','周三','周四','周五','周六'];
+
+  function renderContributionGrid(year) {
+    const grid = document.getElementById('contribution-grid');
+    const monthsEl = document.getElementById('contribution-months');
+    const tooltip = document.getElementById('contribution-tooltip');
+    if (!grid) return;
+    grid.innerHTML = '';
+    monthsEl.innerHTML = '';
+
+    const data = yearlyData[String(year)] || {};
+    const today = new Date();
+
+    // 显示整年视图：Jan 1 到 Dec 31（当年则到今天）
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31);
+    const isCurrentYear = (year === today.getFullYear());
+    const endDate = isCurrentYear ? new Date(today) : yearEnd;
+
+    // 对齐到周一：如果 Jan 1 不是周一，往回补齐
+    const startDay = yearStart.getDay();
+    const mondayOffset = startDay === 0 ? 6 : startDay - 1;
+    const startDate = new Date(yearStart);
+    startDate.setDate(startDate.getDate() - mondayOffset);
+
+    // 收集周数据：从 startDate 开始，按周推进
+    const weeks = [];
+    const cur = new Date(startDate);
+    // 最多 53 周
+    for (let wi = 0; wi < 53; wi++) {
+      const weekDates = [];
+      for (let di = 0; di < 7; di++) {
+        const day = new Date(cur);
+        weekDates.push(day);
+        cur.setDate(cur.getDate() + 1);
+      }
+      weeks.push(weekDates);
+      // 如果这一周的第一天已经超过 yearEnd，说明完整年份已渲染完
+      if (weekDates[0] > yearEnd) break;
+    }
+
+    // 渲染月份标签
+    const cellSize = 13;
+    const cellGap = 3;
+    const cellWidth = cellSize + cellGap;
+    const totalWidth = weeks.length * cellWidth;
+    monthsEl.style.width = totalWidth + 'px';
+    let lastMonth = -1;
+    let monthHtml = '';
+    weeks.forEach(function(w, wi) {
+      // 找这周中属于当前年份的第一个日期来判断月份
+      let firstInYear = null;
+      for (let i = 0; i < w.length; i++) {
+        if (w[i] && w[i].getFullYear() === year) {
+          firstInYear = w[i];
+          break;
+        }
+      }
+      if (!firstInYear) return;
+      const m = firstInYear.getMonth();
+      if (m !== lastMonth) {
+        monthHtml += '<span class="contribution-month-label" style="position:absolute;left:' + (wi * cellWidth) + 'px">' + monthNames[m] + '</span>';
+        lastMonth = m;
+      }
+    });
+    monthsEl.innerHTML = monthHtml;
+
+    // 渲染格子
+    weeks.forEach(function(w) {
+      w.forEach(function(d, dayIdx) {
+        const c = document.createElement('div');
+        c.className = 'contribution-cell';
+        if (!d || d.getFullYear() !== year) {
+          c.style.visibility = 'hidden';
+          grid.appendChild(c);
+          return;
+        }
+        const key = d.toISOString().slice(0, 10);
+        const count = data[key] || 0;
+        if (d > today) {
+          c.style.opacity = '0.3';
+        } else if (count >= 10) {
+          c.classList.add('level-4');
+        } else if (count >= 7) {
+          c.classList.add('level-3');
+        } else if (count >= 4) {
+          c.classList.add('level-2');
+        } else if (count >= 1) {
+          c.classList.add('level-1');
+        }
+        // tooltip
+        const dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        c.dataset.tip = dateStr + ' ' + weekDayNames[d.getDay()] + ': ' + count + ' 次复习';
+        c.addEventListener('mouseenter', function(e) {
+          tooltip.textContent = this.dataset.tip;
+          tooltip.style.display = 'block';
+          const rect = this.getBoundingClientRect();
+          tooltip.style.left = (rect.left + rect.width/2 - tooltip.offsetWidth/2) + 'px';
+          tooltip.style.top = (rect.top - tooltip.offsetHeight - 6) + 'px';
+        });
+        c.addEventListener('mouseleave', function() {
+          tooltip.style.display = 'none';
+        });
+        grid.appendChild(c);
+      });
+    });
+  }
+
+  function switchYear(year) {
+    currentViewYear = year;
+    document.querySelectorAll('.year-tab').forEach(function(t) {
+      t.classList.toggle('active', parseInt(t.textContent) === year);
+    });
+    renderContributionGrid(year);
+  }
+
+  renderContributionGrid(currentViewYear);
+
+  // ===== 生词复习列表（分页） =====
+  let currentVocabFilter = 'all';
+  let currentVocabPage = 1;
+  const VOCAB_PAGE_SIZE = 10;
+
+  function loadVocabList(filter, page) {
+    if (filter !== undefined) currentVocabFilter = filter;
+    if (page !== undefined) currentVocabPage = page;
+    const tbody = document.getElementById('vocab-table-body');
+    if (!tbody) return;
+
+    // 不清空 tbody，避免表格高度变化导致页面跳动
+    // 仅在第一次加载且没有数据时显示"加载中"
+    if (!tbody.dataset.loaded) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--color-text-secondary);padding:24px;">加载中...</td></tr>';
+    }
+
+    const url = '/api/practice/vocab-list?filter=' + encodeURIComponent(currentVocabFilter)
+      + '&page=' + currentVocabPage
+      + '&page_size=' + VOCAB_PAGE_SIZE;
+
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        tbody.dataset.loaded = '1';
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--color-text-secondary);padding:24px;">暂无生词</td></tr>';
+          renderPagination(0, currentVocabPage);
+          return;
+        }
+        const rows = [];
+        data.items.forEach(function(v) {
+          let statusText = '', statusClass = '', rowClass = '';
+          if (v.status === 'mastered') {
+            statusText = '已掌握';
+            statusClass = 'vocab-status-mastered';
+            rowClass = 'mastered';
+          } else if (v.status === 'new') {
+            statusText = '新词';
+            statusClass = 'vocab-status-new';
+          } else if (v.status === 'due') {
+            statusText = '已过期';
+            statusClass = 'vocab-status-due';
+            rowClass = 'due';
+          } else if (v.status === 'upcoming') {
+            statusText = '未到期';
+            statusClass = 'vocab-status-upcoming';
+          }
+          const overdueClass = v.status === 'due' ? 'due' : 'upcoming';
+          const translation = (v.translation || '').split(';')[0].split('；')[0].trim();
+          const phonetic = v.phonetic ? '<span class="vocab-phonetic">' + escapeHtml(v.phonetic) + '</span>' : '';
+          rows.push(
+            '<tr class="' + rowClass + '">' +
+              '<td><span class="vocab-word">' + escapeHtml(v.word) + '</span>' + phonetic + '</td>' +
+              '<td><span class="vocab-translation">' + escapeHtml(translation) + '</span></td>' +
+              '<td><span class="vocab-status ' + statusClass + '">' + statusText + '</span></td>' +
+              '<td><span class="vocab-overdue ' + overdueClass + '">' + v.overdue_str + '</span></td>' +
+              '<td><span class="vocab-review-count">' + v.review_count + ' 次</span></td>' +
+            '</tr>'
+          );
+        });
+        tbody.innerHTML = rows.join('');
+        renderPagination(data.total_pages || 1, data.page || 1);
+      })
+      .catch(function() {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#c92a2a;padding:24px;">加载失败</td></tr>';
+        renderPagination(0, currentVocabPage);
+      });
+  }
+
+  function renderPagination(totalPages, currentPage) {
+    const el = document.getElementById('vocab-pagination');
+    if (!el) return;
+    if (!totalPages || totalPages <= 1) {
+      el.innerHTML = '';
+      return;
+    }
+    let html = '';
+    html += '<button type="button" class="vocab-page-btn" ' + (currentPage <= 1 ? 'disabled' : '') + ' data-page="' + (currentPage - 1) + '">上一页</button>';
+
+    // 页码（最多显示 7 个）
+    const maxBtns = 7;
+    let start = Math.max(1, currentPage - Math.floor(maxBtns / 2));
+    let end = Math.min(totalPages, start + maxBtns - 1);
+    start = Math.max(1, end - maxBtns + 1);
+    for (let p = start; p <= end; p++) {
+      html += '<button type="button" class="vocab-page-btn ' + (p === currentPage ? 'active' : '') + '" data-page="' + p + '">' + p + '</button>';
+    }
+
+    html += '<button type="button" class="vocab-page-btn" ' + (currentPage >= totalPages ? 'disabled' : '') + ' data-page="' + (currentPage + 1) + '">下一页</button>';
+    html += '<span class="vocab-page-info">第 ' + currentPage + ' / ' + totalPages + ' 页</span>';
+    el.innerHTML = html;
+
+    // 绑定点击事件：阻止任何默认行为，仅翻页
+    el.querySelectorAll('.vocab-page-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const p = parseInt(btn.dataset.page);
+        if (!p || p === currentVocabPage) return;
+        // 记录当前滚动位置，fetch 完成后恢复
+        const scrollY = window.scrollY;
+        loadVocabList(undefined, p);
+        // 异步恢复滚动位置（fetch 完成后内容变化但页面布局不变）
+        setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
+        setTimeout(function() { window.scrollTo(0, scrollY); }, 100);
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // 筛选标签点击
+  document.querySelectorAll('.vocab-filter-tab').forEach(function(t) {
+    t.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('.vocab-filter-tab').forEach(function(x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      loadVocabList(t.dataset.filter, 1);
+    });
+  });
+
+  loadVocabList('all', 1);
+
+  // 如果 URL 带 ?auto=1 或 sessionStorage 有 pending 标记，自动开始复习
+  (function autoStartIfNeeded() {
+    try {
+      const shouldAuto = sessionStorage.getItem('autoStartReview') === '1' || window.location.search.indexOf('auto=1') >= 0;
+      if (shouldAuto) {
+        sessionStorage.removeItem('autoStartReview');
+        // 清除 URL 参数
+        if (window.location.search.indexOf('auto=1') >= 0) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('auto');
+          window.history.replaceState({}, '', url.toString());
+        }
+        // 强制从最新到期词开始，清掉旧进度
+        clearReviewProgress();
+        setTimeout(startReview, 200);
+      }
+    } catch(e) {}
+  })();
+
+  // ===== 复习逻辑：每词两题（拼写+翻译），两题都完成才算一次复习 =====
+  // currentVocabIndex: 当前复习的词在 reviewItems 中的 index
+  // currentQuestion: 'spelling' / 'matching'
+  // 同词两题都完成后，调用 /api/practice/finish-vocab 推进 next_review_at，再进入下一词
+  let reviewItems = [];
+  let currentVocabIndex = 0;
+  let currentQuestion = 'spelling';
+  let currentSpellingCorrect = false;
+  let currentMatchingCorrect = false;
+  const REVIEW_SESSION_KEY = 'reviewSession';
+  const REVIEW_VOCAB_KEY = 'reviewVocabIndex';
+  const REVIEW_QUESTION_KEY = 'reviewQuestion';
+
+  function saveReviewProgress() {
+    localStorage.setItem(REVIEW_SESSION_KEY, JSON.stringify(reviewItems));
+    localStorage.setItem(REVIEW_VOCAB_KEY, String(currentVocabIndex));
+    localStorage.setItem(REVIEW_QUESTION_KEY, currentQuestion);
+  }
+
+  function loadReviewProgress() {
+    const saved = localStorage.getItem(REVIEW_SESSION_KEY);
+    const savedIdx = localStorage.getItem(REVIEW_VOCAB_KEY);
+    const savedQ = localStorage.getItem(REVIEW_QUESTION_KEY);
+    if (saved && savedIdx) {
+      try {
+        const items = JSON.parse(saved);
+        const idx = parseInt(savedIdx);
+        if (items.length > 0 && idx < items.length) {
+          return { items: items, index: idx, question: savedQ || 'spelling' };
+        }
+      } catch(e) {}
+    }
+    return null;
+  }
+
+  function clearReviewProgress() {
+    localStorage.removeItem(REVIEW_SESSION_KEY);
+    localStorage.removeItem(REVIEW_VOCAB_KEY);
+    localStorage.removeItem(REVIEW_QUESTION_KEY);
+  }
+
+  function closeReview() {
+    document.getElementById('practice-overlay').style.display = 'none';
+    window.location.reload();
+  }
+
+  async function startReview() {
+    const progress = loadReviewProgress();
+    if (progress) {
+      reviewItems = progress.items;
+      currentVocabIndex = progress.index;
+      currentQuestion = progress.question || 'spelling';
+      currentSpellingCorrect = false;
+      currentMatchingCorrect = false;
+      document.getElementById('practice-overlay').style.display = 'flex';
+      renderReviewQuestion();
+      return;
+    }
+
+    currentVocabIndex = 0;
+    currentQuestion = 'spelling';
+    currentSpellingCorrect = false;
+    currentMatchingCorrect = false;
+    const res = await fetch('/api/practice/session?type=mixed');
+    const data = await res.json();
+    if (!data.items || data.items.length === 0) {
+      showToast('没有可复习的生词');
+      return;
+    }
+    reviewItems = data.items;
+    saveReviewProgress();
+    document.getElementById('practice-overlay').style.display = 'flex';
+    renderReviewQuestion();
+  }
+
+  function masterBtnHtml(vocabId) {
+    return '<button class="btn-master" onclick="markAsMastered(' + vocabId + ')">我已掌握</button>';
+  }
+
+  function renderReviewQuestion() {
+    const modal = document.getElementById('practice-modal');
+    const item = reviewItems[currentVocabIndex];
+    // 进度：每词2题，所以每词占 50%
+    const within = currentQuestion === 'spelling' ? 0 : 50;
+    const totalProgress = ((currentVocabIndex + within / 100) / reviewItems.length * 100).toFixed(0);
+
+    const questionTitle = currentQuestion === 'spelling' ? '拼写' : '选择翻译';
+    const subTitle = '第 ' + (currentVocabIndex + 1) + ' / ' + reviewItems.length + ' 词  ·  ' +
+      (currentQuestion === 'spelling' ? '① 拼写 → ② 翻译' : '✓ 拼写 → ② 翻译');
+
+    const headerHtml =
+      '<button class="practice-modal-close" onclick="closeReview()" title="退出复习">×</button>' +
+      '<h3>' + questionTitle + '</h3>' +
+      '<div class="practice-progress">' + subTitle + '</div>' +
+      '<div class="practice-progress-bar"><div class="fill" style="width:' + totalProgress + '%"></div></div>';
+
+    if (currentQuestion === 'spelling') {
+      modal.innerHTML =
+        headerHtml +
+        '<div class="spelling-question">请拼写以下单词</div>' +
+        '<div class="spelling-hint">' + item.translation + '</div>' +
+        '<input type="text" class="spelling-input" id="spelling-input" autocomplete="off" autocapitalize="off" />' +
+        '<div class="spelling-answer" id="spelling-answer"></div>' +
+        '<div class="practice-btn-row">' +
+          masterBtnHtml(item.id) +
+          '<button class="btn-next" id="btn-check" onclick="checkSpelling()">确认</button>' +
+        '</div>';
+
+      const input = document.getElementById('spelling-input');
+      input.focus();
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.isComposing) {
+          if (document.getElementById('btn-check')) checkSpelling();
+        }
+      });
+    } else {
+      const options = [item.translation.split(';')[0].split('；')[0].trim()];
+      const distractors = item.distractors || [];
+      distractors.forEach(function(d) {
+        options.push(d.translation.split(';')[0].split('；')[0].trim());
+      });
+      const shuffled = options.sort(function() { return Math.random() - 0.5; });
+      const correctAnswer = item.translation.split(';')[0].split('；')[0].trim();
+
+      let optionsHtml = '';
+      shuffled.forEach(function(opt) {
+        const escapedOpt = opt.replace(/'/g, "\\'");
+        const escapedCorrect = correctAnswer.replace(/'/g, "\\'");
+        optionsHtml += '<button class="choice-option" onclick="selectChoice(this, \'' + escapedOpt + '\', \'' + escapedCorrect + '\')">' + opt + '</button>';
+      });
+
+      modal.innerHTML =
+        headerHtml +
+        '<div style="font-size:22px;font-weight:700;text-align:center;margin-bottom:24px;">' + item.word + '</div>' +
+        '<div class="choice-options" id="choice-options">' + optionsHtml + '</div>' +
+        '<div id="choice-answer" style="font-size:14px;margin-top:12px;min-height:20px;"></div>' +
+        '<div class="practice-btn-row">' + masterBtnHtml(item.id) + '</div>';
+    }
+  }
+
+  // 答完当前题后调用：决定进入下一题 / 下一词 / 结束
+  function proceedAfterAnswer() {
+    if (currentQuestion === 'spelling') {
+      // 进入翻译题
+      currentQuestion = 'matching';
+      saveReviewProgress();
+      renderReviewQuestion();
+    } else {
+      // 两题都完成，调用 finish-vocab 推进复习时间
+      const item = reviewItems[currentVocabIndex];
+      fetch('/api/practice/finish-vocab?vocab_id=' + item.id +
+            '&spelling_correct=' + currentSpellingCorrect +
+            '&matching_correct=' + currentMatchingCorrect, { method: 'POST' });
+      // 进入下一词
+      currentVocabIndex++;
+      currentQuestion = 'spelling';
+      currentSpellingCorrect = false;
+      currentMatchingCorrect = false;
+      saveReviewProgress();
+      if (currentVocabIndex >= reviewItems.length) {
+        clearReviewProgress();
+        showReviewComplete();
+      } else {
+        renderReviewQuestion();
+      }
+    }
+  }
+
+  function checkSpelling() {
+    const input = document.getElementById('spelling-input');
+    const answer = document.getElementById('spelling-answer');
+    const item = reviewItems[currentVocabIndex];
+    const userInput = input.value.trim();
+    const correct = userInput.toLowerCase() === item.word.toLowerCase();
+
+    input.classList.add(correct ? 'correct' : 'wrong');
+    input.disabled = true;
+    answer.className = 'spelling-answer ' + (correct ? 'correct' : 'wrong');
+    answer.textContent = correct ? '正确！接下来选择翻译...' : '错误，正确答案: ' + item.word;
+
+    document.getElementById('btn-check').style.display = 'none';
+
+    currentSpellingCorrect = correct;
+    fetch('/api/practice/submit?vocab_id=' + item.id + '&review_type=spelling&correct=' + correct, { method: 'POST' });
+
+    const btnRow = document.querySelector('.practice-btn-row');
+    btnRow.innerHTML = masterBtnHtml(item.id) +
+      '<button class="btn-next" onclick="proceedAfterAnswer()">下一题</button>';
+  }
+
+  function markAsMastered(vocabId) {
+    fetch('/api/practice/master?vocab_id=' + vocabId, { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          showToast('已标记为掌握');
+          // 直接跳到下一词
+          currentVocabIndex++;
+          currentQuestion = 'spelling';
+          currentSpellingCorrect = false;
+          currentMatchingCorrect = false;
+          saveReviewProgress();
+          if (currentVocabIndex >= reviewItems.length) {
+            clearReviewProgress();
+            showReviewComplete();
+          } else {
+            renderReviewQuestion();
+          }
+        } else {
+          showToast('操作失败');
+        }
+      });
+  }
+
+  function selectChoice(btn, selected, correct) {
+    const item = reviewItems[currentVocabIndex];
+    const isCorrect = selected === correct;
+    const allBtns = document.querySelectorAll('.choice-option');
+
+    allBtns.forEach(function(b) { b.classList.add('disabled'); });
+    btn.classList.remove('disabled');
+
+    if (isCorrect) {
+      btn.classList.add('correct');
+    } else {
+      btn.classList.add('wrong');
+      allBtns.forEach(function(b) {
+        if (b.textContent.trim() === correct) b.classList.add('correct');
+      });
+    }
+
+    const answerEl = document.getElementById('choice-answer');
+    answerEl.style.color = isCorrect ? '#2b8a3e' : '#e03131';
+    answerEl.textContent = isCorrect ? '正确！进入下一词...' : '错误，正确答案: ' + correct;
+
+    currentMatchingCorrect = isCorrect;
+    fetch('/api/practice/submit?vocab_id=' + item.id + '&review_type=matching&correct=' + isCorrect, { method: 'POST' });
+
+    const btnRow = document.querySelector('.practice-btn-row');
+    btnRow.innerHTML = masterBtnHtml(item.id) +
+      '<button class="btn-next" onclick="proceedAfterAnswer()">下一词</button>';
+  }
+
+  function showReviewComplete() {
+    const modal = document.getElementById('practice-modal');
+    modal.innerHTML =
+      '<div class="practice-complete">' +
+        '<div class="emoji">🎉</div>' +
+        '<h3>复习完成!</h3>' +
+        '<p>已完成 ' + reviewItems.length + ' 个生词的拼写+翻译复习</p>' +
+        '<div class="practice-btn-row" style="justify-content:center;margin-top:24px;">' +
+          '<button class="btn-next" onclick="closeReview()">返回</button>' +
+        '</div>' +
+      '</div>';
+  }
+</script>
+{% endblock %}

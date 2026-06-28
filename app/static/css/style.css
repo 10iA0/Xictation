@@ -243,6 +243,30 @@ a:hover {
   color: #e53e3e;
 }
 
+/* ========== 强制复习弹窗 ========== */
+.review-force-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review-force-modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -363,6 +387,20 @@ a:hover {
 }
 .btn-annotation[data-type="burst"]:hover {
   background-color: var(--color-burst);
+}
+.btn-ai-analyze {
+  background-color: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
+.btn-ai-analyze:hover {
+  background-color: var(--color-primary-hover);
+  color: white;
+}
+.btn-ai-analyze:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ========== 列表页 ========== */
@@ -869,7 +907,12 @@ a:hover {
 .card-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   margin-top: 12px;
+}
+.card-footer > button {
+  min-width: 64px;
 }
 .btn-save-card {
   /* 统一保存按钮 */
@@ -954,9 +997,12 @@ a:hover {
 /* 删除单个标注的×按钮 */
 .ann-remove {
   cursor: pointer;
-  font-size: 9px;
-  opacity: 0.5;
-  margin-left: 1px;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.6;
+  margin-left: 4px;
+  padding: 0 2px;
+  line-height: 1;
 }
 .ann-remove:hover {
   opacity: 1;

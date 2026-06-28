@@ -172,9 +172,26 @@ class Vocabulary(Base):
     sources = Column(JSON, nullable=True, default=dict)  # {cannot_read: [{dictation_id, dictation_title, card_id}], cannot_understand: [...]}
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)  # 所属用户
     created_at = Column(DateTime, default=datetime.utcnow)
+    next_review_at = Column(DateTime, nullable=True)  # 下次复习时间
+    review_count = Column(Integer, default=0)  # 已复习次数
+    mastery_level = Column(Integer, default=0)  # 掌握度：0=新词 1=学习中 2=已掌握
 
     source_dictation = relationship("Dictation", foreign_keys=[source_dictation_id])
     source_card = relationship("DictationCard", back_populates="vocabularies", foreign_keys=[source_card_id])
+
+
+class ReviewLog(Base):
+    """复习记录表"""
+    __tablename__ = "review_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    vocabulary_id = Column(Integer, ForeignKey("vocabulary.id", ondelete="CASCADE"), nullable=False, index=True)
+    review_type = Column(String(20), nullable=False)  # spelling / matching
+    correct = Column(Integer, nullable=False, default=0)  # 1=正确 0=错误
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    vocabulary = relationship("Vocabulary", foreign_keys=[vocabulary_id])
 
 
 class Tag(Base):

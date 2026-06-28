@@ -1,5 +1,6 @@
 """API 路由：CRUD 操作"""
 import json
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -8,7 +9,7 @@ from typing import Optional, List
 from app.database import get_db
 from app import models
 from app.auth import get_current_user_id
-from app.deepseek import DeepSeekError, lookup_word as ds_lookup, translate_text as ds_translate
+from app.deepseek import DeepSeekError, lookup_word as ds_lookup, translate_text as ds_translate, analyze_phonetics as ds_analyze_phonetics
 from sqlalchemy import func
 
 router = APIRouter(prefix="/api")
@@ -319,6 +320,68 @@ def translate_card(card_id: int, request: Request, db: Session = Depends(get_db)
     if not translation:
         raise HTTPException(500, "翻译失败")
     return {"translation": translation}
+
+
+@router.post("/cards/{card_id}/analyze-phonetics")
+def analyze_card_phonetics(card_id: int, request: Request, db: Session = Depends(get_db)):
+    """调用 DeepSeek 分析正确内容中的连读/弱读，自动保存标注"""
+    user = _current_user(request, db)
+    card = _get_user_card(db, user, card_id)
+    text = (card.correct_content or "").strip()
+    if not text:
+        raise HTTPException(400, "正确内容为空，无法分析")
+    try:
+        items = ds_analyze_phonetics(text, user_key=user.deepseek_api_key)
+    except DeepSeekError as e:
+        return _deepseek_error_response(e)
+
+    # AI 分析前清除该卡片 correct_content 字段的旧 liaison/weak 标注
+    db.query(models.TextAnnotation).filter(
+        models.TextAnnotation.card_id == card_id,
+        models.TextAnnotation.field == "correct_content",
+        models.TextAnnotation.annotation_type.in_(["liaison", "weak"]),
+    ).delete(synchronize_session=False)
+
+    # 在原文中定位每个子串，自动创建标注（大小写不敏感查找）
+    saved = 0
+    skipped = 0
+    used_ranges = []  # [(start, end)] 已使用的范围，避免重叠
+    text_lower = text.lower()
+    for item in items:
+        sub = item["text"]
+        sub_lower = sub.lower()
+        search_from = 0
+        found_idx = -1
+        found_end = -1
+        while search_from < len(text):
+            idx = text_lower.find(sub_lower, search_from)
+            if idx < 0:
+                break
+            end = idx + len(sub)
+            overlap = any(not (end <= s or idx >= e) for s, e in used_ranges)
+            if not overlap:
+                found_idx = idx
+                found_end = end
+                used_ranges.append((idx, end))
+                break
+            search_from = idx + 1
+        if found_idx < 0:
+            skipped += 1
+            continue
+        # text_content 用原句中的精确子串（含正确大小写）
+        ann = models.TextAnnotation(
+            card_id=card_id,
+            field="correct_content",
+            start_offset=found_idx,
+            end_offset=found_end,
+            text_content=text[found_idx:found_end],
+            annotation_type=item["type"],
+            annotation_value=None,
+        )
+        db.add(ann)
+        saved += 1
+    db.commit()
+    return {"saved": saved, "skipped": skipped, "total": len(items)}
 
 
 @router.delete("/cards/{card_id}")
@@ -846,6 +909,7 @@ def create_vocabulary(payload: VocabularyCreate, request: Request, db: Session =
             source_card_id=payload.source_card_id,
             sources=sources,
             user_id=user.id,
+            next_review_at=datetime.utcnow() + timedelta(days=1),
         )
         db.add(word)
         db.commit()
@@ -949,10 +1013,16 @@ def update_vocabulary(word_id: int, payload: VocabularyUpdate, request: Request,
                         models.Dictation.id == word.source_dictation_id,
                         models.Dictation.user_id == user.id,
                     ).first()
+                    # 查卡片内容用于预览
+                    card = db.query(models.DictationCard).filter(
+                        models.DictationCard.id == payload.card_id,
+                    ).first()
+                    card_content = (card.content or "")[:30] if card else ""
                     cat_list.append({
                         "dictation_id": word.source_dictation_id,
                         "dictation_title": dictation.title if dictation else "",
                         "card_id": payload.card_id,
+                        "card_content": card_content,
                     })
             else:
                 # 移除该卡片的来源
