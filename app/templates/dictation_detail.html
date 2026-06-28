@@ -401,11 +401,11 @@
               <div class="content-label">
                 翻译内容
                 <button
-                  class="btn-secondary btn-small btn-translate"
+                  class="btn-annotation btn-ai-analyze btn-translate"
                   type="button"
                   onclick="translateCard({{ card.id }})"
                 >
-                  翻译
+                  AI翻译
                 </button>
               </div>
               <textarea
@@ -475,7 +475,7 @@
   </div>
 </div>
 {% endblock %} {% block extra_script %}
-<script src="/static/js/detail.js?v=67"></script>
+<script src="/static/js/detail.js?v=68"></script>
 <script>
   // 处理 #card-row-{id} 锚点：滚动到目标卡片并高亮
   (function () {

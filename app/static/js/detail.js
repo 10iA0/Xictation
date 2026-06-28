@@ -1811,7 +1811,7 @@ function showVocabForm(
         <div class="vocab-form">
           <div class="vocab-form-word-row">
             <input type="text" class="inline-modal-input vocab-form-word" placeholder="单词" value="${defaults.word}" />
-            <button class="btn-secondary btn-small btn-lookup" type="button">查询</button>
+            <button class="btn-annotation btn-ai-analyze btn-lookup" type="button">AI查询</button>
           </div>
           <input type="text" class="inline-modal-input vocab-form-phonetic" placeholder="音标（可留空）" value="${defaults.phonetic}" />
           <input type="text" class="inline-modal-input vocab-form-pos" placeholder="词性（如 verb/noun/adj，可留空）" value="${defaults.pos}" />
