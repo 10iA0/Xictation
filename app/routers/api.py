@@ -212,7 +212,7 @@ def delete_dictation(dictation_id: int, request: Request, db: Session = Depends(
         if not v.sources or not isinstance(v.sources, dict):
             continue
         changed = False
-        for cat in ["cannot_read", "cannot_understand"]:
+        for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
             cat_list = v.sources.get(cat, [])
             new_list = [s for s in cat_list if s.get("dictation_id") != dictation_id]
             if len(new_list) != len(cat_list):
@@ -226,10 +226,12 @@ def delete_dictation(dictation_id: int, request: Request, db: Session = Depends(
                 labels.append("cannot_read")
             if v.sources.get("cannot_understand"):
                 labels.append("cannot_understand")
+            if v.sources.get("cannot_hear"):
+                labels.append("cannot_hear")
             v.labels = labels
             flag_modified(v, "labels")
-            # 两类来源都空则删除
-            if not v.sources.get("cannot_read") and not v.sources.get("cannot_understand"):
+            # 来源都空则删除
+            if not v.sources.get("cannot_read") and not v.sources.get("cannot_understand") and not v.sources.get("cannot_hear"):
                 db.delete(v)
 
     db.delete(dictation)
@@ -516,7 +518,7 @@ def paste_card(dictation_id: int, request: Request, db: Session = Depends(get_db
             continue
         changed = False
         sources = v.sources
-        for cat in ["cannot_read", "cannot_understand"]:
+        for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
             cat_list = sources.get(cat, [])
             for s in cat_list:
                 if s.get("card_id") == source_card.id:
@@ -543,7 +545,7 @@ def paste_card(dictation_id: int, request: Request, db: Session = Depends(get_db
                 continue
             changed = False
             sources = v.sources
-            for cat in ["cannot_read", "cannot_understand"]:
+            for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
                 cat_list = sources.get(cat, [])
                 new_list = [s for s in cat_list if s.get("card_id") != source_card.id]
                 if len(new_list) != len(cat_list):
@@ -698,7 +700,7 @@ def delete_analysis_card(card_id: int, request: Request, db: Session = Depends(g
         if not v.sources or not isinstance(v.sources, dict):
             continue
         changed = False
-        for cat in ["cannot_read", "cannot_understand"]:
+        for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
             cat_list = v.sources.get(cat, [])
             new_list = [s for s in cat_list if s.get("card_id") != card_id]
             if len(new_list) != len(cat_list):
@@ -712,10 +714,12 @@ def delete_analysis_card(card_id: int, request: Request, db: Session = Depends(g
                 labels.append("cannot_read")
             if v.sources.get("cannot_understand"):
                 labels.append("cannot_understand")
+            if v.sources.get("cannot_hear"):
+                labels.append("cannot_hear")
             v.labels = labels
             flag_modified(v, "labels")
-            # 两类来源都空则删除
-            if not v.sources.get("cannot_read") and not v.sources.get("cannot_understand"):
+            # 来源都空则删除
+            if not v.sources.get("cannot_read") and not v.sources.get("cannot_understand") and not v.sources.get("cannot_hear"):
                 db.delete(v)
 
     db.commit()
@@ -862,7 +866,7 @@ def create_vocabulary(payload: VocabularyCreate, request: Request, db: Session =
         if source_entry:
             sources = existing.sources or {}
             if not isinstance(sources, dict):
-                sources = {"cannot_read": [], "cannot_understand": []}
+                sources = {"cannot_read": [], "cannot_understand": [], "cannot_hear": []}
             target_cats = payload.labels if payload.labels else [category]
             for cat in target_cats:
                 cat_list = sources.get(cat, [])
@@ -890,7 +894,7 @@ def create_vocabulary(payload: VocabularyCreate, request: Request, db: Session =
         db.refresh(existing)
         return {"id": existing.id, "merged": True}
     else:
-        sources = {"cannot_read": [], "cannot_understand": []}
+        sources = {"cannot_read": [], "cannot_understand": [], "cannot_hear": []}
         if source_entry:
             # 将来源添加到所有选中的分类
             target_cats = payload.labels if payload.labels else [category]
@@ -946,8 +950,8 @@ def update_vocabulary(word_id: int, payload: VocabularyUpdate, request: Request,
             src = word.sources or {}
             existing_src = existing.sources or {}
             if not isinstance(existing_src, dict):
-                existing_src = {"cannot_read": [], "cannot_understand": []}
-            for cat in ["cannot_read", "cannot_understand"]:
+                existing_src = {"cannot_read": [], "cannot_understand": [], "cannot_hear": []}
+            for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
                 existing_list = existing_src.get(cat, [])
                 for s in src.get(cat, []):
                     if not any(e.get("card_id") == s.get("card_id") for e in existing_list):
@@ -1001,9 +1005,9 @@ def update_vocabulary(word_id: int, payload: VocabularyUpdate, request: Request,
     if payload.card_id is not None and payload.categories is not None:
         sources = word.sources or {}
         if not isinstance(sources, dict):
-            sources = {"cannot_read": [], "cannot_understand": []}
+            sources = {"cannot_read": [], "cannot_understand": [], "cannot_hear": []}
 
-        for cat in ["cannot_read", "cannot_understand"]:
+        for cat in ["cannot_read", "cannot_understand", "cannot_hear"]:
             cat_list = sources.get(cat, [])
             if cat in payload.categories:
                 # 确保来源存在
@@ -1038,11 +1042,13 @@ def update_vocabulary(word_id: int, payload: VocabularyUpdate, request: Request,
             labels.append("cannot_read")
         if sources.get("cannot_understand"):
             labels.append("cannot_understand")
+        if sources.get("cannot_hear"):
+            labels.append("cannot_hear")
         word.labels = labels
         flag_modified(word, "labels")
 
-        # 两类来源都空则删除
-        if not sources.get("cannot_read") and not sources.get("cannot_understand"):
+        # 来源都空则删除
+        if not sources.get("cannot_read") and not sources.get("cannot_understand") and not sources.get("cannot_hear"):
             db.delete(word)
             db.commit()
             return {"ok": True, "deleted": True}
@@ -1063,7 +1069,7 @@ def remove_vocab_source(word_id: int, payload: VocabSourceRemove, request: Reque
 
     sources = word.sources or {}
     if not isinstance(sources, dict):
-        sources = {"cannot_read": [], "cannot_understand": []}
+        sources = {"cannot_read": [], "cannot_understand": [], "cannot_hear": []}
 
     cat_list = sources.get(payload.category, [])
     cat_list = [s for s in cat_list if s.get("card_id") != payload.card_id]
@@ -1078,11 +1084,13 @@ def remove_vocab_source(word_id: int, payload: VocabSourceRemove, request: Reque
         labels.append("cannot_read")
     if sources.get("cannot_understand"):
         labels.append("cannot_understand")
+    if sources.get("cannot_hear"):
+        labels.append("cannot_hear")
     word.labels = labels
     flag_modified(word, "labels")
 
-    # 两类来源都空则删除
-    if not sources.get("cannot_read") and not sources.get("cannot_understand"):
+    # 来源都空则删除
+    if not sources.get("cannot_read") and not sources.get("cannot_understand") and not sources.get("cannot_hear"):
         db.delete(word)
         db.commit()
         return {"ok": True, "deleted": True}

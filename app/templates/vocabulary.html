@@ -76,26 +76,28 @@ block content %}
       <p class="vocab-notes">{{ w.notes }}</p>
       {% endif %}
       <div class="vocab-meta">
-        {% set read_sources = (w.sources or {}).get('cannot_read', []) if
-        w.sources and w.sources is mapping else [] %} {% set understand_sources
-        = (w.sources or {}).get('cannot_understand', []) if w.sources and
-        w.sources is mapping else [] %} {% if read_sources %}
+        {% set hear_sources = (w.sources or {}).get('cannot_hear', []) if
+        w.sources and w.sources is mapping else [] %} {% if hear_sources %}
         <div class="vocab-sources">
-          <span class="vocab-source-label source-label-read">读不懂</span>
+          <span class="vocab-source-label source-label-hear">听不见</span>
           <div class="vocab-source-list">
-            {% for s in read_sources %}
+            {% for s in hear_sources %}
             <a
               href="/dictations/{{ s.dictation_id }}#card-row-{{ s.card_id }}"
               class="vocab-source-tag"
               title="{{ s.dictation_title }}{% if s.card_content %} - {{ s.card_content }}{% endif %}"
             >
               <span class="vocab-source-title">{{ s.dictation_title }}</span>
-              <span class="vocab-source-card">卡片#{{ s.card_index or loop.index }}</span>
+              <span class="vocab-source-card"
+                >卡片#{{ s.card_index or loop.index }}</span
+              >
             </a>
             {% endfor %}
           </div>
         </div>
-        {% endif %} {% if understand_sources %}
+        {% endif %} {% set understand_sources = (w.sources or
+        {}).get('cannot_understand', []) if w.sources and w.sources is mapping
+        else [] %} {% if understand_sources %}
         <div class="vocab-sources">
           <span class="vocab-source-label source-label-understand">听不懂</span>
           <div class="vocab-source-list">
@@ -106,7 +108,9 @@ block content %}
               title="{{ s.dictation_title }}{% if s.card_content %} - {{ s.card_content }}{% endif %}"
             >
               <span class="vocab-source-title">{{ s.dictation_title }}</span>
-              <span class="vocab-source-card">卡片#{{ s.card_index or loop.index }}</span>
+              <span class="vocab-source-card"
+                >卡片#{{ s.card_index or loop.index }}</span
+              >
             </a>
             {% endfor %}
           </div>

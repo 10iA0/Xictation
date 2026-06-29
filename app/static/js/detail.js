@@ -1512,19 +1512,14 @@ function insertAnalysisCard(cardRow, cardId, analysisCardId) {
       </div>
       <div class="analysis-sections">
         <div class="analysis-section">
-          <h5>读不懂</h5>
-          <div class="vocab-list" data-card-id="${cardId}"></div>
-          <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_read')">+ 添加</button>
+          <h5>听不见（连读/弱读）</h5>
+          <div class="vocab-list vocab-list-hear" data-card-id="${cardId}"></div>
+          <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_hear')">+ 添加</button>
         </div>
         <div class="analysis-section">
           <h5>听不懂（音标/重音）</h5>
-          <div class="vocab-list" data-card-id="${cardId}"></div>
+          <div class="vocab-list vocab-list-understand" data-card-id="${cardId}"></div>
           <button class="btn-secondary btn-small" onclick="addVocabFromAnalysis(${cardId}, ${dictationId}, 'cannot_understand')">+ 添加</button>
-        </div>
-        <div class="analysis-section">
-          <h5>听不到（连读/弱读）</h5>
-          <div class="analysis-records" data-category="cannot_hear" data-card-id="${cardId}"></div>
-          <button class="btn-secondary btn-small" onclick="addAnalysisRecord(${cardId}, 'cannot_hear')">+ 添加</button>
         </div>
       </div>
     </div>
@@ -1723,7 +1718,7 @@ async function editVocab(vocabId, cardId) {
   const notesEl = item.querySelector(".vocab-notes");
   const notes = notesEl ? notesEl.textContent.trim() : "";
 
-  // 检查该单词在哪些分类中出现（同一单词可能在读不懂和听不懂都出现）
+  // 检查该单词在哪些分类中出现（同一单词可能在听不见和听不懂都出现）
   const allItems = document.querySelectorAll(
     `.vocab-item[data-id="${vocabId}"]`,
   );
@@ -1732,18 +1727,18 @@ async function editVocab(vocabId, cardId) {
     const section = el.closest(".analysis-section");
     if (section) {
       const h5 = section.querySelector("h5");
-      if (
-        h5 &&
-        h5.textContent.includes("读不懂") &&
-        !labels.includes("cannot_read")
-      )
-        labels.push("cannot_read");
-      if (
-        h5 &&
-        h5.textContent.includes("听不懂") &&
-        !labels.includes("cannot_understand")
-      )
-        labels.push("cannot_understand");
+      if (h5) {
+        if (
+          h5.textContent.includes("听不见") &&
+          !labels.includes("cannot_hear")
+        )
+          labels.push("cannot_hear");
+        if (
+          h5.textContent.includes("听不懂") &&
+          !labels.includes("cannot_understand")
+        )
+          labels.push("cannot_understand");
+      }
     }
   });
 
@@ -1799,10 +1794,10 @@ function showVocabForm(
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "inline-modal-overlay";
-    const readChecked = defaults.labels.includes("cannot_read")
+    const understandChecked = defaults.labels.includes("cannot_understand")
       ? "checked"
       : "";
-    const understandChecked = defaults.labels.includes("cannot_understand")
+    const hearChecked = defaults.labels.includes("cannot_hear")
       ? "checked"
       : "";
     overlay.innerHTML = `
@@ -1810,7 +1805,7 @@ function showVocabForm(
         <p class="inline-modal-message">生词信息</p>
         <div class="vocab-form">
           <div class="vocab-form-word-row">
-            <input type="text" class="inline-modal-input vocab-form-word" placeholder="单词" value="${defaults.word}" />
+            <input type="text" class="inline-modal-input vocab-form-word" placeholder="单词/词组/短语/句子" value="${defaults.word}" />
             <button class="btn-annotation btn-ai-analyze btn-lookup" type="button">AI查询</button>
           </div>
           <input type="text" class="inline-modal-input vocab-form-phonetic" placeholder="音标（可留空）" value="${defaults.phonetic}" />
@@ -1819,10 +1814,10 @@ function showVocabForm(
             <input type="text" class="inline-modal-input vocab-form-past-tense" placeholder="过去式（可留空）" value="${defaults.past_tense}" />
             <input type="text" class="inline-modal-input vocab-form-past-participle" placeholder="过去分词（可留空）" value="${defaults.past_participle}" />
           </div>
-          <textarea class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空，多个含义用分号分隔）" rows="2">${defaults.translation}</textarea>
+          <textarea class="inline-modal-input vocab-form-translation" placeholder="解释（可留空，多个含义用分号分隔）" rows="2">${defaults.translation}</textarea>
           <textarea class="inline-modal-input vocab-form-notes" placeholder="备注（可留空）" rows="2">${defaults.notes}</textarea>
           <div class="vocab-form-categories">
-            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-read" ${readChecked} /> 看不懂</label>
+            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-hear" ${hearChecked} /> 听不见</label>
             <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-understand" ${understandChecked} /> 听不懂</label>
           </div>
           <div class="vocab-form-hint" style="display:none;"></div>
@@ -1914,13 +1909,13 @@ function showVocabForm(
     const submit = () => {
       const word = wordInput.value.trim();
       if (!word) {
-        showToast("请输入单词");
+        showToast("请输入内容");
         return;
       }
       // 读取分类选择
       const labels = [];
-      if (overlay.querySelector(".vocab-cat-read")?.checked)
-        labels.push("cannot_read");
+      if (overlay.querySelector(".vocab-cat-hear")?.checked)
+        labels.push("cannot_hear");
       if (overlay.querySelector(".vocab-cat-understand")?.checked)
         labels.push("cannot_understand");
       close({

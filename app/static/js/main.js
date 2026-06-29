@@ -138,10 +138,10 @@ async function editVocabFromList(vocabId) {
   const notesEl = card.querySelector(".vocab-notes");
   const notes = notesEl ? notesEl.textContent.trim() : "";
 
-  // 从标签徽章读取当前 labels
+  // 从来源标签读取当前 labels
   const labels = [];
-  card.querySelectorAll(".label-badge").forEach((badge) => {
-    if (badge.textContent.includes("读不懂")) labels.push("cannot_read");
+  card.querySelectorAll(".vocab-source-label").forEach((badge) => {
+    if (badge.textContent.includes("听不见")) labels.push("cannot_hear");
     if (badge.textContent.includes("听不懂")) labels.push("cannot_understand");
   });
 
@@ -194,12 +194,18 @@ function showVocabForm(
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "inline-modal-overlay";
+    const understandChecked = defaults.labels.includes("cannot_understand")
+      ? "checked"
+      : "";
+    const hearChecked = defaults.labels.includes("cannot_hear")
+      ? "checked"
+      : "";
     overlay.innerHTML = `
       <div class="inline-modal">
         <p class="inline-modal-message">生词信息</p>
         <div class="vocab-form">
           <div class="vocab-form-word-row">
-            <input type="text" class="inline-modal-input vocab-form-word" placeholder="单词" value="${defaults.word}" />
+            <input type="text" class="inline-modal-input vocab-form-word" placeholder="单词/词组/短语/句子" value="${defaults.word}" />
             <button class="btn-annotation btn-ai-analyze btn-lookup" type="button">AI查询</button>
           </div>
           <input type="text" class="inline-modal-input vocab-form-phonetic" placeholder="音标（可留空）" value="${defaults.phonetic}" />
@@ -210,6 +216,10 @@ function showVocabForm(
           </div>
           <textarea class="inline-modal-input vocab-form-translation" placeholder="翻译（可留空，多个含义用分号分隔）" rows="2">${defaults.translation}</textarea>
           <textarea class="inline-modal-input vocab-form-notes" placeholder="备注（可留空）" rows="2">${defaults.notes}</textarea>
+          <div class="vocab-form-categories">
+            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-hear" ${hearChecked} /> 听不见</label>
+            <label class="vocab-category-label"><input type="checkbox" class="vocab-cat-understand" ${understandChecked} /> 听不懂</label>
+          </div>
           <div class="vocab-form-hint" style="display:none;"></div>
         </div>
         <div class="inline-modal-buttons">
@@ -262,7 +272,7 @@ function showVocabForm(
     lookupBtn.onclick = async () => {
       const word = wordInput.value.trim();
       if (!word) {
-        showToast("请先输入单词");
+        showToast("请先输入内容");
         return;
       }
       hintEl.textContent = "正在查询音标和翻译...";
@@ -292,9 +302,14 @@ function showVocabForm(
     const submit = () => {
       const word = wordInput.value.trim();
       if (!word) {
-        showToast("请输入单词");
+        showToast("请输入内容");
         return;
       }
+      const labels = [];
+      if (overlay.querySelector(".vocab-cat-hear")?.checked)
+        labels.push("cannot_hear");
+      if (overlay.querySelector(".vocab-cat-understand")?.checked)
+        labels.push("cannot_understand");
       close({
         word,
         phonetic: phoneticInput.value.trim(),
@@ -303,7 +318,7 @@ function showVocabForm(
         past_participle: pastParticipleInput.value.trim(),
         translation: translationInput.value.trim(),
         notes: notesInput.value.trim(),
-        labels: defaults.labels || [],
+        labels,
       });
     };
     overlay.querySelector(".inline-ok").onclick = submit;

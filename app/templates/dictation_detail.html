@@ -236,9 +236,12 @@
             </div>
             <div class="analysis-sections">
               <div class="analysis-section">
-                <h5>读不懂</h5>
-                <div class="vocab-list" data-card-id="{{ card.id }}">
-                  {% for v in card.vocab_read %}
+                <h5>听不见（连读/弱读）</h5>
+                <div
+                  class="vocab-list vocab-list-hear"
+                  data-card-id="{{ card.id }}"
+                >
+                  {% for v in card.vocab_hear %}
                   <div class="vocab-item vocab-card" data-id="{{ v.id }}">
                     <div class="vocab-card-header">
                       <h3 class="vocab-word">{{ v.word }}</h3>
@@ -252,7 +255,7 @@
                         </button>
                         <button
                           class="btn-icon btn-delete"
-                          onclick="deleteVocabFromCard({{ v.id }}, {{ card.id }}, 'cannot_read')"
+                          onclick="deleteVocabFromCard({{ v.id }}, {{ card.id }}, 'cannot_hear')"
                           title="删除"
                         >
                           ×
@@ -282,14 +285,17 @@
                 </div>
                 <button
                   class="btn-secondary btn-small"
-                  onclick="addVocabFromAnalysis({{ card.id }}, {{ dictation.id }}, 'cannot_read')"
+                  onclick="addVocabFromAnalysis({{ card.id }}, {{ dictation.id }}, 'cannot_hear')"
                 >
                   + 添加
                 </button>
               </div>
               <div class="analysis-section">
                 <h5>听不懂（音标/重音）</h5>
-                <div class="vocab-list" data-card-id="{{ card.id }}">
+                <div
+                  class="vocab-list vocab-list-understand"
+                  data-card-id="{{ card.id }}"
+                >
                   {% for v in card.vocab_understand %}
                   <div class="vocab-item vocab-card" data-id="{{ v.id }}">
                     <div class="vocab-card-header">
@@ -335,38 +341,6 @@
                 <button
                   class="btn-secondary btn-small"
                   onclick="addVocabFromAnalysis({{ card.id }}, {{ dictation.id }}, 'cannot_understand')"
-                >
-                  + 添加
-                </button>
-              </div>
-              <div class="analysis-section">
-                <h5>听不到（连读/弱读）</h5>
-                <div
-                  class="analysis-records"
-                  data-category="cannot_hear"
-                  data-card-id="{{ card.id }}"
-                >
-                  {% for r in card.analysis_card.records if r.category ==
-                  'cannot_hear' %}
-                  <div class="analysis-record" data-id="{{ r.id }}">
-                    <span
-                      class="record-content"
-                      onclick="editAnalysisRecord({{ r.id }}, this)"
-                      >{{ r.content }}</span
-                    >
-                    <button
-                      class="btn-icon"
-                      onclick="deleteAnalysisRecord({{ r.id }})"
-                      title="删除"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {% endfor %}
-                </div>
-                <button
-                  class="btn-secondary btn-small"
-                  onclick="addAnalysisRecord({{ card.id }}, 'cannot_hear')"
                 >
                   + 添加
                 </button>
@@ -475,7 +449,7 @@
   </div>
 </div>
 {% endblock %} {% block extra_script %}
-<script src="/static/js/detail.js?v=68"></script>
+<script src="/static/js/detail.js?v=70"></script>
 <script>
   // 处理 #card-row-{id} 锚点：滚动到目标卡片并高亮
   (function () {

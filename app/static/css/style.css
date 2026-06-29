@@ -1322,6 +1322,9 @@ a:hover {
 .source-label-understand {
   color: #0040a0;
 }
+.source-label-hear {
+  color: #7b1fa2;
+}
 .vocab-source-list {
   display: flex;
   flex-wrap: wrap;

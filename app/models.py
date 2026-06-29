@@ -91,7 +91,8 @@ class DictationCard(Base):
                 continue
             read_sources = v.sources.get("cannot_read", [])
             understand_sources = v.sources.get("cannot_understand", [])
-            for s in read_sources + understand_sources:
+            hear_sources = v.sources.get("cannot_hear", [])
+            for s in read_sources + understand_sources + hear_sources:
                 if s.get("card_id") == self.id:
                     result.append(v)
                     break
@@ -107,6 +108,12 @@ class DictationCard(Base):
     def vocab_understand(self):
         return [v for v in self._get_vocab_for_card() if any(
             s.get("card_id") == self.id for s in (v.sources or {}).get("cannot_understand", [])
+        )]
+
+    @property
+    def vocab_hear(self):
+        return [v for v in self._get_vocab_for_card() if any(
+            s.get("card_id") == self.id for s in (v.sources or {}).get("cannot_hear", [])
         )]
 
 

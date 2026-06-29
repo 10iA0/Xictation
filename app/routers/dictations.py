@@ -93,7 +93,7 @@ async def vocabulary_list(request: Request, q: Optional[str] = None, sort: str =
         dictation_ids = set()
         for w in words:
             src = w.sources if isinstance(w.sources, dict) else {}
-            for cat in ("cannot_read", "cannot_understand"):
+            for cat in ("cannot_read", "cannot_understand", "cannot_hear"):
                 for s in (src.get(cat) or []):
                     if isinstance(s, dict) and s.get("dictation_id"):
                         dictation_ids.add(s["dictation_id"])
@@ -113,7 +113,7 @@ async def vocabulary_list(request: Request, q: Optional[str] = None, sort: str =
         # 给每个 word 的 source 加上 card_index
         for w in words:
             src = w.sources if isinstance(w.sources, dict) else {}
-            for cat in ("cannot_read", "cannot_understand"):
+            for cat in ("cannot_read", "cannot_understand", "cannot_hear"):
                 lst = src.get(cat) or []
                 for s in lst:
                     if isinstance(s, dict) and s.get("card_id") and s.get("dictation_id"):
